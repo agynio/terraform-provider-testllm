@@ -42,28 +42,33 @@ func (r *organizationResource) Schema(_ context.Context, _ resource.SchemaReques
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				Computed: true,
+				Description: "Unique identifier for the organization.",
+				Computed:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"name": schema.StringAttribute{
-				Required: true,
+				Description: "Display name for the organization.",
+				Required:    true,
 			},
 			"slug": schema.StringAttribute{
-				Required: true,
+				Description: "Unique slug for the organization.",
+				Required:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"created_at": schema.StringAttribute{
-				Computed: true,
+				Description: "Timestamp when the organization was created.",
+				Computed:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"updated_at": schema.StringAttribute{
-				Computed: true,
+				Description: "Timestamp when the organization was last updated.",
+				Computed:    true,
 			},
 		},
 	}
