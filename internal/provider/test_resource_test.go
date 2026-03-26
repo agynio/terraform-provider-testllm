@@ -137,6 +137,17 @@ func TestAccTestResource_validateConfig(t *testing.T) {
   }
 ]`
 
+	invalidBoolItems := `[
+  {
+		type        = "message"
+		role        = "assistant"
+		content     = "Hello"
+		any_role    = true
+		any_content = true
+		repeat      = true
+  }
+]`
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -152,6 +163,10 @@ func TestAccTestResource_validateConfig(t *testing.T) {
 			{
 				Config:      testAccTestResourceConfig(orgName, orgSlug, suiteName, testName, "", invalidTypeItems),
 				ExpectError: regexp.MustCompile("type"),
+			},
+			{
+				Config:      testAccTestResourceConfig(orgName, orgSlug, suiteName, testName, "", invalidBoolItems),
+				ExpectError: regexp.MustCompile("any_role"),
 			},
 		},
 	})

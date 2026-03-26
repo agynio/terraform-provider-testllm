@@ -37,8 +37,11 @@ type testUpdateRequest struct {
 }
 
 type messageContent struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role       string `json:"role"`
+	Content    string `json:"content"`
+	AnyRole    *bool  `json:"any_role,omitempty"`
+	AnyContent *bool  `json:"any_content,omitempty"`
+	Repeat     *bool  `json:"repeat,omitempty"`
 }
 
 type functionCallContent struct {
@@ -52,8 +55,19 @@ type functionCallOutputContent struct {
 	Output string `json:"output"`
 }
 
-func NewMessageItem(role, content string) (TestItem, error) {
-	payload, err := json.Marshal(messageContent{Role: role, Content: content})
+func NewMessageItem(role, content string, anyRole, anyContent, repeat *bool) (TestItem, error) {
+	messagePayload := messageContent{Role: role, Content: content}
+	if anyRole != nil && *anyRole {
+		messagePayload.AnyRole = anyRole
+	}
+	if anyContent != nil && *anyContent {
+		messagePayload.AnyContent = anyContent
+	}
+	if repeat != nil && *repeat {
+		messagePayload.Repeat = repeat
+	}
+
+	payload, err := json.Marshal(messagePayload)
 	if err != nil {
 		return TestItem{}, err
 	}
@@ -76,12 +90,19 @@ func NewFunctionCallOutputItem(callID, output string) (TestItem, error) {
 	return TestItem{Type: "function_call_output", Content: payload}, nil
 }
 
-func ParseMessageContent(item TestItem) (string, string, error) {
+func ParseMessageContent(item TestItem) (string, string, bool, bool, bool, error) {
 	var payload messageContent
 	if err := json.Unmarshal(item.Content, &payload); err != nil {
-		return "", "", err
+		return "", "", false, false, false, err
 	}
-	return payload.Role, payload.Content, nil
+	return payload.Role, payload.Content, boolFromPointer(payload.AnyRole), boolFromPointer(payload.AnyContent), boolFromPointer(payload.Repeat), nil
+}
+
+func boolFromPointer(value *bool) bool {
+	if value == nil {
+		return false
+	}
+	return *value
 }
 
 func ParseFunctionCallContent(item TestItem) (string, string, string, error) {
