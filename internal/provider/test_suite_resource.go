@@ -46,33 +46,39 @@ func (r *testSuiteResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				Computed: true,
+				Description: "Unique identifier for the test suite.",
+				Computed:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"org_id": schema.StringAttribute{
-				Required: true,
+				Description: "Organization ID that owns the test suite.",
+				Required:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"name": schema.StringAttribute{
-				Required: true,
+				Description: "Display name for the test suite.",
+				Required:    true,
 			},
 			"description": schema.StringAttribute{
-				Optional: true,
-				Computed: true,
-				Default:  stringdefault.StaticString(""),
+				Description: "Description of the test suite.",
+				Optional:    true,
+				Computed:    true,
+				Default:     stringdefault.StaticString(""),
 			},
 			"created_at": schema.StringAttribute{
-				Computed: true,
+				Description: "Timestamp when the test suite was created.",
+				Computed:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"updated_at": schema.StringAttribute{
-				Computed: true,
+				Description: "Timestamp when the test suite was last updated.",
+				Computed:    true,
 			},
 		},
 	}

@@ -45,6 +45,14 @@ func (c *Client) GetOrganization(ctx context.Context, orgID string) (*Organizati
 	return &response, nil
 }
 
+func (c *Client) ListOrganizations(ctx context.Context) ([]Organization, error) {
+	var response []Organization
+	if err := c.doRequest(ctx, http.MethodGet, "/api/orgs", nil, &response); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
 func (c *Client) UpdateOrganization(ctx context.Context, orgID, name string) (*Organization, error) {
 	request := organizationUpdateRequest{
 		Name: name,

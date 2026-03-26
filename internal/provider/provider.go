@@ -38,11 +38,13 @@ func (p *testllmProvider) Schema(_ context.Context, _ provider.SchemaRequest, re
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
 			"host": schema.StringAttribute{
-				Optional: true,
+				Description: "TestLLM API base URL. Defaults to https://testllm.dev. May also be set via the TESTLLM_HOST environment variable.",
+				Optional:    true,
 			},
 			"token": schema.StringAttribute{
-				Optional:  true,
-				Sensitive: true,
+				Description: "API authentication token. May also be set via the TESTLLM_TOKEN environment variable.",
+				Optional:    true,
+				Sensitive:   true,
 			},
 		},
 	}
@@ -76,19 +78,13 @@ func (p *testllmProvider) Configure(ctx context.Context, req provider.ConfigureR
 	if host == "" {
 		host = os.Getenv("TESTLLM_HOST")
 	}
+	if host == "" {
+		host = "https://testllm.dev"
+	}
 
 	token := config.Token.ValueString()
 	if token == "" {
 		token = os.Getenv("TESTLLM_TOKEN")
-	}
-
-	if host == "" {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("host"),
-			"Missing TestLLM host",
-			"The provider cannot create the TestLLM client because the host value is missing. Set the host in configuration or via TESTLLM_HOST.",
-		)
-		return
 	}
 	if token == "" {
 		resp.Diagnostics.AddAttributeError(
@@ -123,5 +119,7 @@ func (p *testllmProvider) Resources(_ context.Context) []func() resource.Resourc
 }
 
 func (p *testllmProvider) DataSources(_ context.Context) []func() datasource.DataSource {
-	return nil
+	return []func() datasource.DataSource{
+		NewOrganizationDataSource,
+	}
 }

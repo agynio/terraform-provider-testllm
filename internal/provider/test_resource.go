@@ -110,88 +110,106 @@ func (r *testResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				Computed: true,
+				Description: "Unique identifier for the test.",
+				Computed:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"org_id": schema.StringAttribute{
-				Required: true,
+				Description: "Organization ID that owns the test.",
+				Required:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"suite_id": schema.StringAttribute{
-				Required: true,
+				Description: "Test suite ID that owns the test.",
+				Required:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"name": schema.StringAttribute{
-				Required: true,
+				Description: "Display name for the test.",
+				Required:    true,
 			},
 			"description": schema.StringAttribute{
-				Optional: true,
-				Computed: true,
-				Default:  stringdefault.StaticString(""),
+				Description: "Description of the test.",
+				Optional:    true,
+				Computed:    true,
+				Default:     stringdefault.StaticString(""),
 			},
 			"items": schema.ListNestedAttribute{
-				Required: true,
+				Description: "Ordered list of test items that define the test flow.",
+				Required:    true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"type": schema.StringAttribute{
-							Required: true,
+							Description: "Item type. One of message, function_call, or function_call_output.",
+							Required:    true,
 							Validators: []validator.String{
 								stringvalidator.OneOf("message", "function_call", "function_call_output"),
 							},
 						},
 						"role": schema.StringAttribute{
-							Optional: true,
+							Description: "Role for message items (user, system, developer, assistant).",
+							Optional:    true,
 							Validators: []validator.String{
 								stringvalidator.OneOf("user", "system", "developer", "assistant"),
 							},
 						},
 						"content": schema.StringAttribute{
-							Optional: true,
+							Description: "Content for message items.",
+							Optional:    true,
 						},
 						"any_role": schema.BoolAttribute{
-							Optional: true,
-							Computed: true,
-							Default:  booldefault.StaticBool(false),
+							Description: "Whether any role is accepted for message items.",
+							Optional:    true,
+							Computed:    true,
+							Default:     booldefault.StaticBool(false),
 						},
 						"any_content": schema.BoolAttribute{
-							Optional: true,
-							Computed: true,
-							Default:  booldefault.StaticBool(false),
+							Description: "Whether any content is accepted for message items.",
+							Optional:    true,
+							Computed:    true,
+							Default:     booldefault.StaticBool(false),
 						},
 						"repeat": schema.BoolAttribute{
-							Optional: true,
-							Computed: true,
-							Default:  booldefault.StaticBool(false),
+							Description: "Whether the message item can repeat.",
+							Optional:    true,
+							Computed:    true,
+							Default:     booldefault.StaticBool(false),
 						},
 						"call_id": schema.StringAttribute{
-							Optional: true,
+							Description: "Function call identifier for function_call and function_call_output items.",
+							Optional:    true,
 						},
 						"func_name": schema.StringAttribute{
-							Optional: true,
+							Description: "Function name for function_call items.",
+							Optional:    true,
 						},
 						"arguments": schema.StringAttribute{
-							Optional: true,
+							Description: "JSON-encoded arguments for function_call items.",
+							Optional:    true,
 						},
 						"output": schema.StringAttribute{
-							Optional: true,
+							Description: "Output content for function_call_output items.",
+							Optional:    true,
 						},
 					},
 				},
 			},
 			"created_at": schema.StringAttribute{
-				Computed: true,
+				Description: "Timestamp when the test was created.",
+				Computed:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"updated_at": schema.StringAttribute{
-				Computed: true,
+				Description: "Timestamp when the test was last updated.",
+				Computed:    true,
 			},
 		},
 	}

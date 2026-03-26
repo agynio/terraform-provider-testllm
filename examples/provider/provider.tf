@@ -11,6 +11,5 @@ variable "testllm_token" {
 }
 
 provider "testllm" {
-  host  = "https://testllm.example.com"
   token = var.testllm_token
 }
