@@ -37,8 +37,19 @@ type testUpdateRequest struct {
 }
 
 type messageContent struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role       string `json:"role"`
+	Content    string `json:"content"`
+	AnyRole    *bool  `json:"any_role,omitempty"`
+	AnyContent *bool  `json:"any_content,omitempty"`
+	Repeat     *bool  `json:"repeat,omitempty"`
+}
+
+type MessageContent struct {
+	Role       string
+	Content    string
+	AnyRole    bool
+	AnyContent bool
+	Repeat     bool
 }
 
 type functionCallContent struct {
@@ -52,8 +63,19 @@ type functionCallOutputContent struct {
 	Output string `json:"output"`
 }
 
-func NewMessageItem(role, content string) (TestItem, error) {
-	payload, err := json.Marshal(messageContent{Role: role, Content: content})
+func NewMessageItem(role, content string, anyRole, anyContent, repeat *bool) (TestItem, error) {
+	messagePayload := messageContent{Role: role, Content: content}
+	if anyRole != nil && *anyRole {
+		messagePayload.AnyRole = anyRole
+	}
+	if anyContent != nil && *anyContent {
+		messagePayload.AnyContent = anyContent
+	}
+	if repeat != nil && *repeat {
+		messagePayload.Repeat = repeat
+	}
+
+	payload, err := json.Marshal(messagePayload)
 	if err != nil {
 		return TestItem{}, err
 	}
@@ -76,12 +98,25 @@ func NewFunctionCallOutputItem(callID, output string) (TestItem, error) {
 	return TestItem{Type: "function_call_output", Content: payload}, nil
 }
 
-func ParseMessageContent(item TestItem) (string, string, error) {
+func ParseMessageContent(item TestItem) (MessageContent, error) {
 	var payload messageContent
 	if err := json.Unmarshal(item.Content, &payload); err != nil {
-		return "", "", err
+		return MessageContent{}, err
 	}
-	return payload.Role, payload.Content, nil
+	return MessageContent{
+		Role:       payload.Role,
+		Content:    payload.Content,
+		AnyRole:    boolFromPointer(payload.AnyRole),
+		AnyContent: boolFromPointer(payload.AnyContent),
+		Repeat:     boolFromPointer(payload.Repeat),
+	}, nil
+}
+
+func boolFromPointer(value *bool) bool {
+	if value == nil {
+		return false
+	}
+	return *value
 }
 
 func ParseFunctionCallContent(item TestItem) (string, string, string, error) {

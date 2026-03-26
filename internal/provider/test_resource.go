@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -41,19 +42,27 @@ type testResourceModel struct {
 }
 
 type testItemModel struct {
-	Type      types.String `tfsdk:"type"`
-	Role      types.String `tfsdk:"role"`
-	Content   types.String `tfsdk:"content"`
-	CallID    types.String `tfsdk:"call_id"`
-	FuncName  types.String `tfsdk:"func_name"`
-	Arguments types.String `tfsdk:"arguments"`
-	Output    types.String `tfsdk:"output"`
+	Type       types.String `tfsdk:"type"`
+	Role       types.String `tfsdk:"role"`
+	Content    types.String `tfsdk:"content"`
+	AnyRole    types.Bool   `tfsdk:"any_role"`
+	AnyContent types.Bool   `tfsdk:"any_content"`
+	Repeat     types.Bool   `tfsdk:"repeat"`
+	CallID     types.String `tfsdk:"call_id"`
+	FuncName   types.String `tfsdk:"func_name"`
+	Arguments  types.String `tfsdk:"arguments"`
+	Output     types.String `tfsdk:"output"`
 }
 
 type itemFieldRule struct {
 	Name     string
 	Getter   func(testItemModel) types.String
 	Required bool
+}
+
+type itemBoolFieldRule struct {
+	Name   string
+	Getter func(testItemModel) types.Bool
 }
 
 var testItemValidationRules = map[string][]itemFieldRule{
@@ -81,6 +90,12 @@ var testItemValidationRules = map[string][]itemFieldRule{
 		{Name: "func_name", Getter: func(item testItemModel) types.String { return item.FuncName }},
 		{Name: "arguments", Getter: func(item testItemModel) types.String { return item.Arguments }},
 	},
+}
+
+var testItemBoolValidationRules = []itemBoolFieldRule{
+	{Name: "any_role", Getter: func(item testItemModel) types.Bool { return item.AnyRole }},
+	{Name: "any_content", Getter: func(item testItemModel) types.Bool { return item.AnyContent }},
+	{Name: "repeat", Getter: func(item testItemModel) types.Bool { return item.Repeat }},
 }
 
 func NewTestResource() resource.Resource {
@@ -138,6 +153,21 @@ func (r *testResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 						},
 						"content": schema.StringAttribute{
 							Optional: true,
+						},
+						"any_role": schema.BoolAttribute{
+							Optional: true,
+							Computed: true,
+							Default:  booldefault.StaticBool(false),
+						},
+						"any_content": schema.BoolAttribute{
+							Optional: true,
+							Computed: true,
+							Default:  booldefault.StaticBool(false),
+						},
+						"repeat": schema.BoolAttribute{
+							Optional: true,
+							Computed: true,
+							Default:  booldefault.StaticBool(false),
 						},
 						"call_id": schema.StringAttribute{
 							Optional: true,
@@ -205,6 +235,24 @@ func (r *testResource) ValidateConfig(ctx context.Context, req resource.Validate
 				continue
 			}
 			validateUnexpectedString(&resp.Diagnostics, value, attrPath, itemType)
+		}
+
+		for _, rule := range testItemBoolValidationRules {
+			attrPath := itemPath.AtName(rule.Name)
+			value := rule.Getter(item)
+			if value.IsUnknown() || value.IsNull() || !value.ValueBool() {
+				continue
+			}
+			if itemType != "message" {
+				resp.Diagnostics.AddAttributeError(attrPath, "Unexpected item attribute", fmt.Sprintf("%s must not be true when type is %q.", attrPath.String(), itemType))
+				continue
+			}
+			if item.Role.IsUnknown() || item.Role.IsNull() {
+				continue
+			}
+			if item.Role.ValueString() == "assistant" {
+				resp.Diagnostics.AddAttributeError(attrPath, "Unexpected item attribute", fmt.Sprintf("%s must not be true when type is %q and role is %q.", attrPath.String(), itemType, item.Role.ValueString()))
+			}
 		}
 	}
 }
@@ -373,6 +421,14 @@ func validateUnexpectedString(diags *diag.Diagnostics, value types.String, attrP
 	diags.AddAttributeError(attrPath, "Unexpected item attribute", fmt.Sprintf("%s must not be set when type is %q.", attrPath.String(), itemType))
 }
 
+func boolPointerFromValue(value types.Bool) *bool {
+	if value.IsUnknown() || value.IsNull() || !value.ValueBool() {
+		return nil
+	}
+	boolValue := true
+	return &boolValue
+}
+
 func expandTestItems(items []testItemModel) ([]client.TestItem, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	if len(items) == 0 {
@@ -389,7 +445,10 @@ func expandTestItems(items []testItemModel) ([]client.TestItem, diag.Diagnostics
 		itemType := item.Type.ValueString()
 		switch itemType {
 		case "message":
-			messageItem, err := client.NewMessageItem(item.Role.ValueString(), item.Content.ValueString())
+			anyRole := boolPointerFromValue(item.AnyRole)
+			anyContent := boolPointerFromValue(item.AnyContent)
+			repeat := boolPointerFromValue(item.Repeat)
+			messageItem, err := client.NewMessageItem(item.Role.ValueString(), item.Content.ValueString(), anyRole, anyContent, repeat)
 			if err != nil {
 				diags.AddError("Error building message item", err.Error())
 				return nil, diags
@@ -428,19 +487,22 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 	for index, item := range items {
 		switch item.Type {
 		case "message":
-			role, content, err := client.ParseMessageContent(item)
+			messageContent, err := client.ParseMessageContent(item)
 			if err != nil {
 				diags.AddError("Error parsing message item", err.Error())
 				return nil, diags
 			}
 			flattened = append(flattened, testItemModel{
-				Type:      types.StringValue("message"),
-				Role:      types.StringValue(role),
-				Content:   types.StringValue(content),
-				CallID:    types.StringNull(),
-				FuncName:  types.StringNull(),
-				Arguments: types.StringNull(),
-				Output:    types.StringNull(),
+				Type:       types.StringValue("message"),
+				Role:       types.StringValue(messageContent.Role),
+				Content:    types.StringValue(messageContent.Content),
+				AnyRole:    types.BoolValue(messageContent.AnyRole),
+				AnyContent: types.BoolValue(messageContent.AnyContent),
+				Repeat:     types.BoolValue(messageContent.Repeat),
+				CallID:     types.StringNull(),
+				FuncName:   types.StringNull(),
+				Arguments:  types.StringNull(),
+				Output:     types.StringNull(),
 			})
 		case "function_call":
 			callID, name, arguments, err := client.ParseFunctionCallContent(item)
@@ -449,13 +511,16 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 				return nil, diags
 			}
 			flattened = append(flattened, testItemModel{
-				Type:      types.StringValue("function_call"),
-				Role:      types.StringNull(),
-				Content:   types.StringNull(),
-				CallID:    types.StringValue(callID),
-				FuncName:  types.StringValue(name),
-				Arguments: types.StringValue(arguments),
-				Output:    types.StringNull(),
+				Type:       types.StringValue("function_call"),
+				Role:       types.StringNull(),
+				Content:    types.StringNull(),
+				AnyRole:    types.BoolValue(false),
+				AnyContent: types.BoolValue(false),
+				Repeat:     types.BoolValue(false),
+				CallID:     types.StringValue(callID),
+				FuncName:   types.StringValue(name),
+				Arguments:  types.StringValue(arguments),
+				Output:     types.StringNull(),
 			})
 		case "function_call_output":
 			callID, output, err := client.ParseFunctionCallOutputContent(item)
@@ -464,13 +529,16 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 				return nil, diags
 			}
 			flattened = append(flattened, testItemModel{
-				Type:      types.StringValue("function_call_output"),
-				Role:      types.StringNull(),
-				Content:   types.StringNull(),
-				CallID:    types.StringValue(callID),
-				FuncName:  types.StringNull(),
-				Arguments: types.StringNull(),
-				Output:    types.StringValue(output),
+				Type:       types.StringValue("function_call_output"),
+				Role:       types.StringNull(),
+				Content:    types.StringNull(),
+				AnyRole:    types.BoolValue(false),
+				AnyContent: types.BoolValue(false),
+				Repeat:     types.BoolValue(false),
+				CallID:     types.StringValue(callID),
+				FuncName:   types.StringNull(),
+				Arguments:  types.StringNull(),
+				Output:     types.StringValue(output),
 			})
 		default:
 			diags.AddAttributeError(path.Root("items").AtListIndex(index).AtName("type"), "Invalid item type", fmt.Sprintf("Unsupported item type %q.", item.Type))
