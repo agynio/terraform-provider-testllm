@@ -37,4 +37,4 @@ TestLLM supports two token types:
 - `host` (String) TestLLM API base URL. Defaults to `https://testllm.dev`.
 - `token` (String, Sensitive) API authentication token.
 
-You can also set `TESTLLM_HOST` and `TESTLLM_TOKEN` environment variables to configure the provider.
+~> **Note:** You can also set `TESTLLM_HOST` and `TESTLLM_TOKEN` environment variables to configure the provider.

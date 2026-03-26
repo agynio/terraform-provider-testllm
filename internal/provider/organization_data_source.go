@@ -6,7 +6,6 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/agynio/terraform-provider-testllm/internal/client"
@@ -77,23 +76,6 @@ func (d *organizationDataSource) Read(ctx context.Context, req datasource.ReadRe
 	var config organizationDataSourceModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
 	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	if config.Slug.IsUnknown() {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("slug"),
-			"Unknown organization slug",
-			"The provider cannot look up the organization because the slug value is unknown.",
-		)
-		return
-	}
-	if config.Slug.IsNull() {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("slug"),
-			"Missing organization slug",
-			"The provider cannot look up the organization because the slug value is missing.",
-		)
 		return
 	}
 
