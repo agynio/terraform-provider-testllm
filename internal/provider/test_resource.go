@@ -487,18 +487,18 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 	for index, item := range items {
 		switch item.Type {
 		case "message":
-			role, content, anyRole, anyContent, repeat, err := client.ParseMessageContent(item)
+			messageContent, err := client.ParseMessageContent(item)
 			if err != nil {
 				diags.AddError("Error parsing message item", err.Error())
 				return nil, diags
 			}
 			flattened = append(flattened, testItemModel{
 				Type:       types.StringValue("message"),
-				Role:       types.StringValue(role),
-				Content:    types.StringValue(content),
-				AnyRole:    types.BoolValue(anyRole),
-				AnyContent: types.BoolValue(anyContent),
-				Repeat:     types.BoolValue(repeat),
+				Role:       types.StringValue(messageContent.Role),
+				Content:    types.StringValue(messageContent.Content),
+				AnyRole:    types.BoolValue(messageContent.AnyRole),
+				AnyContent: types.BoolValue(messageContent.AnyContent),
+				Repeat:     types.BoolValue(messageContent.Repeat),
 				CallID:     types.StringNull(),
 				FuncName:   types.StringNull(),
 				Arguments:  types.StringNull(),
@@ -514,9 +514,9 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 				Type:       types.StringValue("function_call"),
 				Role:       types.StringNull(),
 				Content:    types.StringNull(),
-				AnyRole:    types.BoolNull(),
-				AnyContent: types.BoolNull(),
-				Repeat:     types.BoolNull(),
+				AnyRole:    types.BoolValue(false),
+				AnyContent: types.BoolValue(false),
+				Repeat:     types.BoolValue(false),
 				CallID:     types.StringValue(callID),
 				FuncName:   types.StringValue(name),
 				Arguments:  types.StringValue(arguments),
@@ -532,9 +532,9 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 				Type:       types.StringValue("function_call_output"),
 				Role:       types.StringNull(),
 				Content:    types.StringNull(),
-				AnyRole:    types.BoolNull(),
-				AnyContent: types.BoolNull(),
-				Repeat:     types.BoolNull(),
+				AnyRole:    types.BoolValue(false),
+				AnyContent: types.BoolValue(false),
+				Repeat:     types.BoolValue(false),
 				CallID:     types.StringValue(callID),
 				FuncName:   types.StringNull(),
 				Arguments:  types.StringNull(),

@@ -107,6 +107,46 @@ func TestAccTestResource_functionCallItems(t *testing.T) {
 	})
 }
 
+func TestAccTestResource_messageFlags(t *testing.T) {
+	orgName := acctest.RandomWithPrefix("tf-org")
+	orgSlug := acctest.RandomWithPrefix("tf-org")
+	suiteName := acctest.RandomWithPrefix("tf-suite")
+	testName := acctest.RandomWithPrefix("tf-test")
+
+	items := `[
+  {
+    type        = "message"
+    role        = "user"
+    content     = "Say hello"
+    any_role    = true
+    any_content = true
+    repeat      = true
+  }
+]`
+
+	config := testAccTestResourceConfig(orgName, orgSlug, suiteName, testName, "", items)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("testllm_test.test", "items.0.any_role", "true"),
+					resource.TestCheckResourceAttr("testllm_test.test", "items.0.any_content", "true"),
+					resource.TestCheckResourceAttr("testllm_test.test", "items.0.repeat", "true"),
+				),
+			},
+			{
+				Config:             config,
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: false,
+			},
+		},
+	})
+}
+
 func TestAccTestResource_validateConfig(t *testing.T) {
 	orgName := acctest.RandomWithPrefix("tf-org")
 	orgSlug := acctest.RandomWithPrefix("tf-org")
