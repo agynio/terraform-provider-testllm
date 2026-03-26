@@ -6,6 +6,10 @@ terraform {
   }
 }
 
+variable "testllm_token" {
+  type = string
+}
+
 provider "testllm" {
   host  = "https://testllm.example.com"
   token = var.testllm_token

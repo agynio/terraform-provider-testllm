@@ -50,7 +50,9 @@ func (c *Client) doRequest(ctx context.Context, method, path string, requestBody
 	}
 
 	request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.Token))
-	request.Header.Set("Content-Type", "application/json")
+	if requestBody != nil {
+		request.Header.Set("Content-Type", "application/json")
+	}
 
 	response, err := c.HTTPClient.Do(request)
 	if err != nil {

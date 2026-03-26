@@ -17,6 +17,11 @@ type organizationResource struct {
 	client *client.Client
 }
 
+var (
+	_ resource.Resource                = &organizationResource{}
+	_ resource.ResourceWithImportState = &organizationResource{}
+)
+
 type organizationResourceModel struct {
 	ID        types.String `tfsdk:"id"`
 	Name      types.String `tfsdk:"name"`
@@ -163,7 +168,6 @@ func (r *organizationResource) Delete(ctx context.Context, req resource.DeleteRe
 
 	if err := r.client.DeleteOrganization(ctx, state.ID.ValueString()); err != nil {
 		if client.IsNotFoundError(err) {
-			resp.State.RemoveResource(ctx)
 			return
 		}
 		resp.Diagnostics.AddError("Error deleting organization", err.Error())

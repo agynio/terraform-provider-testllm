@@ -20,6 +20,11 @@ type testSuiteResource struct {
 	client *client.Client
 }
 
+var (
+	_ resource.Resource                = &testSuiteResource{}
+	_ resource.ResourceWithImportState = &testSuiteResource{}
+)
+
 type testSuiteResourceModel struct {
 	ID          types.String `tfsdk:"id"`
 	OrgID       types.String `tfsdk:"org_id"`
@@ -175,7 +180,6 @@ func (r *testSuiteResource) Delete(ctx context.Context, req resource.DeleteReque
 
 	if err := r.client.DeleteTestSuite(ctx, state.OrgID.ValueString(), state.ID.ValueString()); err != nil {
 		if client.IsNotFoundError(err) {
-			resp.State.RemoveResource(ctx)
 			return
 		}
 		resp.Diagnostics.AddError("Error deleting test suite", err.Error())

@@ -23,6 +23,12 @@ type testResource struct {
 	client *client.Client
 }
 
+var (
+	_ resource.Resource                   = &testResource{}
+	_ resource.ResourceWithImportState    = &testResource{}
+	_ resource.ResourceWithValidateConfig = &testResource{}
+)
+
 type testResourceModel struct {
 	ID          types.String    `tfsdk:"id"`
 	OrgID       types.String    `tfsdk:"org_id"`
@@ -42,6 +48,39 @@ type testItemModel struct {
 	FuncName  types.String `tfsdk:"func_name"`
 	Arguments types.String `tfsdk:"arguments"`
 	Output    types.String `tfsdk:"output"`
+}
+
+type itemFieldRule struct {
+	Name     string
+	Getter   func(testItemModel) types.String
+	Required bool
+}
+
+var testItemValidationRules = map[string][]itemFieldRule{
+	"message": {
+		{Name: "role", Getter: func(item testItemModel) types.String { return item.Role }, Required: true},
+		{Name: "content", Getter: func(item testItemModel) types.String { return item.Content }, Required: true},
+		{Name: "call_id", Getter: func(item testItemModel) types.String { return item.CallID }},
+		{Name: "func_name", Getter: func(item testItemModel) types.String { return item.FuncName }},
+		{Name: "arguments", Getter: func(item testItemModel) types.String { return item.Arguments }},
+		{Name: "output", Getter: func(item testItemModel) types.String { return item.Output }},
+	},
+	"function_call": {
+		{Name: "call_id", Getter: func(item testItemModel) types.String { return item.CallID }, Required: true},
+		{Name: "func_name", Getter: func(item testItemModel) types.String { return item.FuncName }, Required: true},
+		{Name: "arguments", Getter: func(item testItemModel) types.String { return item.Arguments }, Required: true},
+		{Name: "role", Getter: func(item testItemModel) types.String { return item.Role }},
+		{Name: "content", Getter: func(item testItemModel) types.String { return item.Content }},
+		{Name: "output", Getter: func(item testItemModel) types.String { return item.Output }},
+	},
+	"function_call_output": {
+		{Name: "call_id", Getter: func(item testItemModel) types.String { return item.CallID }, Required: true},
+		{Name: "output", Getter: func(item testItemModel) types.String { return item.Output }, Required: true},
+		{Name: "role", Getter: func(item testItemModel) types.String { return item.Role }},
+		{Name: "content", Getter: func(item testItemModel) types.String { return item.Content }},
+		{Name: "func_name", Getter: func(item testItemModel) types.String { return item.FuncName }},
+		{Name: "arguments", Getter: func(item testItemModel) types.String { return item.Arguments }},
+	},
 }
 
 func NewTestResource() resource.Resource {
@@ -152,28 +191,20 @@ func (r *testResource) ValidateConfig(ctx context.Context, req resource.Validate
 			continue
 		}
 		itemType := item.Type.ValueString()
-		switch itemType {
-		case "message":
-			validateRequiredString(&resp.Diagnostics, item.Role, path.Root("items").AtListIndex(index).AtName("role"), "message")
-			validateRequiredString(&resp.Diagnostics, item.Content, path.Root("items").AtListIndex(index).AtName("content"), "message")
-			validateUnexpectedString(&resp.Diagnostics, item.CallID, path.Root("items").AtListIndex(index).AtName("call_id"), "message")
-			validateUnexpectedString(&resp.Diagnostics, item.FuncName, path.Root("items").AtListIndex(index).AtName("func_name"), "message")
-			validateUnexpectedString(&resp.Diagnostics, item.Arguments, path.Root("items").AtListIndex(index).AtName("arguments"), "message")
-			validateUnexpectedString(&resp.Diagnostics, item.Output, path.Root("items").AtListIndex(index).AtName("output"), "message")
-		case "function_call":
-			validateRequiredString(&resp.Diagnostics, item.CallID, path.Root("items").AtListIndex(index).AtName("call_id"), "function_call")
-			validateRequiredString(&resp.Diagnostics, item.FuncName, path.Root("items").AtListIndex(index).AtName("func_name"), "function_call")
-			validateRequiredString(&resp.Diagnostics, item.Arguments, path.Root("items").AtListIndex(index).AtName("arguments"), "function_call")
-			validateUnexpectedString(&resp.Diagnostics, item.Role, path.Root("items").AtListIndex(index).AtName("role"), "function_call")
-			validateUnexpectedString(&resp.Diagnostics, item.Content, path.Root("items").AtListIndex(index).AtName("content"), "function_call")
-			validateUnexpectedString(&resp.Diagnostics, item.Output, path.Root("items").AtListIndex(index).AtName("output"), "function_call")
-		case "function_call_output":
-			validateRequiredString(&resp.Diagnostics, item.CallID, path.Root("items").AtListIndex(index).AtName("call_id"), "function_call_output")
-			validateRequiredString(&resp.Diagnostics, item.Output, path.Root("items").AtListIndex(index).AtName("output"), "function_call_output")
-			validateUnexpectedString(&resp.Diagnostics, item.Role, path.Root("items").AtListIndex(index).AtName("role"), "function_call_output")
-			validateUnexpectedString(&resp.Diagnostics, item.Content, path.Root("items").AtListIndex(index).AtName("content"), "function_call_output")
-			validateUnexpectedString(&resp.Diagnostics, item.FuncName, path.Root("items").AtListIndex(index).AtName("func_name"), "function_call_output")
-			validateUnexpectedString(&resp.Diagnostics, item.Arguments, path.Root("items").AtListIndex(index).AtName("arguments"), "function_call_output")
+		itemPath := path.Root("items").AtListIndex(index)
+		rules, ok := testItemValidationRules[itemType]
+		if !ok {
+			resp.Diagnostics.AddAttributeError(itemPath.AtName("type"), "Invalid item type", fmt.Sprintf("Unsupported item type %q.", itemType))
+			continue
+		}
+		for _, rule := range rules {
+			attrPath := itemPath.AtName(rule.Name)
+			value := rule.Getter(item)
+			if rule.Required {
+				validateRequiredString(&resp.Diagnostics, value, attrPath, itemType)
+				continue
+			}
+			validateUnexpectedString(&resp.Diagnostics, value, attrPath, itemType)
 		}
 	}
 }
@@ -304,7 +335,6 @@ func (r *testResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 
 	if err := r.client.DeleteTest(ctx, state.OrgID.ValueString(), state.SuiteID.ValueString(), state.ID.ValueString()); err != nil {
 		if client.IsNotFoundError(err) {
-			resp.State.RemoveResource(ctx)
 			return
 		}
 		resp.Diagnostics.AddError("Error deleting test", err.Error())
@@ -352,65 +382,36 @@ func expandTestItems(items []testItemModel) ([]client.TestItem, diag.Diagnostics
 	expanded := make([]client.TestItem, 0, len(items))
 	for index, item := range items {
 		if item.Type.IsUnknown() || item.Type.IsNull() {
-			diags.AddAttributeError(path.Root("items").AtListIndex(index).AtName("type"), "Missing item type", "Each item must include a known type.")
-			continue
+			diags.AddAttributeError(path.Root("items").AtListIndex(index).AtName("type"), "Invalid item type", "Each item must include a known type.")
+			return nil, diags
 		}
 
-		switch item.Type.ValueString() {
+		itemType := item.Type.ValueString()
+		switch itemType {
 		case "message":
-			if item.Role.IsUnknown() || item.Role.IsNull() {
-				diags.AddAttributeError(path.Root("items").AtListIndex(index).AtName("role"), "Missing role", "Role is required for message items.")
-				continue
-			}
-			if item.Content.IsUnknown() || item.Content.IsNull() {
-				diags.AddAttributeError(path.Root("items").AtListIndex(index).AtName("content"), "Missing content", "Content is required for message items.")
-				continue
-			}
-
 			messageItem, err := client.NewMessageItem(item.Role.ValueString(), item.Content.ValueString())
 			if err != nil {
 				diags.AddError("Error building message item", err.Error())
-				continue
+				return nil, diags
 			}
 			expanded = append(expanded, messageItem)
 		case "function_call":
-			if item.CallID.IsUnknown() || item.CallID.IsNull() {
-				diags.AddAttributeError(path.Root("items").AtListIndex(index).AtName("call_id"), "Missing call_id", "call_id is required for function_call items.")
-				continue
-			}
-			if item.FuncName.IsUnknown() || item.FuncName.IsNull() {
-				diags.AddAttributeError(path.Root("items").AtListIndex(index).AtName("func_name"), "Missing func_name", "func_name is required for function_call items.")
-				continue
-			}
-			if item.Arguments.IsUnknown() || item.Arguments.IsNull() {
-				diags.AddAttributeError(path.Root("items").AtListIndex(index).AtName("arguments"), "Missing arguments", "arguments is required for function_call items.")
-				continue
-			}
-
 			callItem, err := client.NewFunctionCallItem(item.CallID.ValueString(), item.FuncName.ValueString(), item.Arguments.ValueString())
 			if err != nil {
 				diags.AddError("Error building function_call item", err.Error())
-				continue
+				return nil, diags
 			}
 			expanded = append(expanded, callItem)
 		case "function_call_output":
-			if item.CallID.IsUnknown() || item.CallID.IsNull() {
-				diags.AddAttributeError(path.Root("items").AtListIndex(index).AtName("call_id"), "Missing call_id", "call_id is required for function_call_output items.")
-				continue
-			}
-			if item.Output.IsUnknown() || item.Output.IsNull() {
-				diags.AddAttributeError(path.Root("items").AtListIndex(index).AtName("output"), "Missing output", "output is required for function_call_output items.")
-				continue
-			}
-
 			outputItem, err := client.NewFunctionCallOutputItem(item.CallID.ValueString(), item.Output.ValueString())
 			if err != nil {
 				diags.AddError("Error building function_call_output item", err.Error())
-				continue
+				return nil, diags
 			}
 			expanded = append(expanded, outputItem)
 		default:
-			diags.AddAttributeError(path.Root("items").AtListIndex(index).AtName("type"), "Invalid item type", fmt.Sprintf("Unsupported item type %q.", item.Type.ValueString()))
+			diags.AddAttributeError(path.Root("items").AtListIndex(index).AtName("type"), "Invalid item type", fmt.Sprintf("Unsupported item type %q.", itemType))
+			return nil, diags
 		}
 	}
 
@@ -430,7 +431,7 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 			role, content, err := client.ParseMessageContent(item)
 			if err != nil {
 				diags.AddError("Error parsing message item", err.Error())
-				continue
+				return nil, diags
 			}
 			flattened = append(flattened, testItemModel{
 				Type:      types.StringValue("message"),
@@ -445,7 +446,7 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 			callID, name, arguments, err := client.ParseFunctionCallContent(item)
 			if err != nil {
 				diags.AddError("Error parsing function_call item", err.Error())
-				continue
+				return nil, diags
 			}
 			flattened = append(flattened, testItemModel{
 				Type:      types.StringValue("function_call"),
@@ -460,7 +461,7 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 			callID, output, err := client.ParseFunctionCallOutputContent(item)
 			if err != nil {
 				diags.AddError("Error parsing function_call_output item", err.Error())
-				continue
+				return nil, diags
 			}
 			flattened = append(flattened, testItemModel{
 				Type:      types.StringValue("function_call_output"),
@@ -473,6 +474,7 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 			})
 		default:
 			diags.AddAttributeError(path.Root("items").AtListIndex(index).AtName("type"), "Invalid item type", fmt.Sprintf("Unsupported item type %q.", item.Type))
+			return nil, diags
 		}
 	}
 
