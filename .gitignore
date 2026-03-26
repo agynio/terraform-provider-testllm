@@ -1,0 +1,5 @@
+terraform-provider-testllm
+.terraform/
+*.tfstate
+*.tfstate.*
+*.out

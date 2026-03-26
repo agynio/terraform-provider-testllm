@@ -1,0 +1,46 @@
+version: 2
+
+project_name: terraform-provider-testllm
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: terraform-provider-testllm
+    main: .
+    binary: "{{ .ProjectName }}_v{{ .Version }}"
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+
+archives:
+  - name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format: zip
+    files:
+      - terraform-registry-manifest.json
+
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_SHA256SUMS"
+
+signs:
+  - artifacts: checksum
+    args:
+      - "--batch"
+      - "--yes"
+      - "--local-user"
+      - "{{ .Env.GPG_FINGERPRINT }}"
+      - "--detach-sign"
+      - "--armor"
+      - "{{ .Artifact }}"
