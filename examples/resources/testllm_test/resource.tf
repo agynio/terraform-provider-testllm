@@ -9,6 +9,12 @@ resource "testllm_test_suite" "example" {
   description = "Basic sanity checks"
 }
 
+resource "testllm_test_suite" "anthropic" {
+  org_id   = testllm_organization.example.id
+  name     = "Anthropic Tests"
+  protocol = "anthropic"
+}
+
 resource "testllm_test" "example" {
   org_id   = testllm_organization.example.id
   suite_id = testllm_test_suite.example.id
@@ -24,6 +30,29 @@ resource "testllm_test" "example" {
       type    = "message"
       role    = "assistant"
       content = "Hello! How can I help you?"
+    },
+  ]
+}
+
+resource "testllm_test" "anthropic" {
+  org_id   = testllm_organization.example.id
+  suite_id = testllm_test_suite.anthropic.id
+  name     = "anthropic-flow"
+
+  items = [
+    {
+      type = "anthropic_system"
+      text = "You are a helpful assistant."
+    },
+    {
+      type    = "anthropic_message"
+      role    = "user"
+      content = "Hello"
+    },
+    {
+      type           = "anthropic_message"
+      role           = "assistant"
+      content_blocks = jsonencode([{ type = "text", text = "Hi there!" }])
     },
   ]
 }

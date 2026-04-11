@@ -30,6 +30,7 @@ resource "testllm_test_suite" "example" {
 ### Optional
 
 - `description` (String) Description of the test suite.
+- `protocol` (String) Protocol used by tests in the suite. Defaults to `openai`.
 
 ### Read-Only
 

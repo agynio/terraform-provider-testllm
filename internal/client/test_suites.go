@@ -12,6 +12,7 @@ type TestSuite struct {
 	OrgID       string `json:"org_id"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
+	Protocol    string `json:"protocol"`
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at"`
 }
@@ -19,6 +20,7 @@ type TestSuite struct {
 type testSuiteCreateRequest struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
+	Protocol    string `json:"protocol,omitempty"`
 }
 
 type testSuiteUpdateRequest struct {
@@ -26,10 +28,11 @@ type testSuiteUpdateRequest struct {
 	Description string `json:"description"`
 }
 
-func (c *Client) CreateTestSuite(ctx context.Context, orgID, name, description string) (*TestSuite, error) {
+func (c *Client) CreateTestSuite(ctx context.Context, orgID, name, description, protocol string) (*TestSuite, error) {
 	request := testSuiteCreateRequest{
 		Name:        name,
 		Description: description,
+		Protocol:    protocol,
 	}
 	var response TestSuite
 	path := fmt.Sprintf("/api/orgs/%s/suites", orgID)

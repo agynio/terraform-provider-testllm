@@ -45,6 +45,44 @@ resource "testllm_test" "example" {
 }
 ```
 
+## Anthropic Example Usage
+
+```hcl
+resource "testllm_organization" "example" {
+  name = "Acme Corp"
+  slug = "acme-corp"
+}
+
+resource "testllm_test_suite" "anthropic" {
+  org_id   = testllm_organization.example.id
+  name     = "Anthropic Tests"
+  protocol = "anthropic"
+}
+
+resource "testllm_test" "anthropic" {
+  org_id   = testllm_organization.example.id
+  suite_id = testllm_test_suite.anthropic.id
+  name     = "anthropic-flow"
+
+  items = [
+    {
+      type = "anthropic_system"
+      text = "You are a helpful assistant."
+    },
+    {
+      type    = "anthropic_message"
+      role    = "user"
+      content = "Hello"
+    },
+    {
+      type           = "anthropic_message"
+      role           = "assistant"
+      content_blocks = jsonencode([{ type = "text", text = "Hi!" }])
+    },
+  ]
+}
+```
+
 ## Schema
 
 ### Required
@@ -68,12 +106,14 @@ resource "testllm_test" "example" {
 
 Required:
 
-- `type` (String) Item type. One of `message`, `function_call`, or `function_call_output`.
+- `type` (String) Item type. One of `message`, `function_call`, `function_call_output`, `anthropic_system`, or `anthropic_message`.
 
 Optional:
 
-- `role` (String) Role for message items (`user`, `system`, `developer`, `assistant`).
+- `role` (String) Role for message and anthropic_message items (`user`, `system`, `developer`, `assistant`).
 - `content` (String) Content for message items.
+- `text` (String) Text content for `anthropic_system` items.
+- `content_blocks` (String) JSON-encoded array of Anthropic content blocks.
 - `any_role` (Bool) Whether any role is accepted for message items.
 - `any_content` (Bool) Whether any content is accepted for message items.
 - `repeat` (Bool) Whether the message item can repeat.
