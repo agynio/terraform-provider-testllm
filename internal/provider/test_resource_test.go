@@ -265,7 +265,7 @@ func TestAccTestResource_crossProtocolAnthropicInOpenAI(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccTestResourceConfig(orgName, orgSlug, suiteName, testName, "", items),
-				ExpectError: regexp.MustCompile("(?s).+"),
+				ExpectError: regexp.MustCompile("(?i)items\\.0.*invalid"),
 			},
 		},
 	})
@@ -291,7 +291,7 @@ func TestAccTestResource_crossProtocolOpenAIInAnthropic(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccAnthropicTestResourceConfig(orgName, orgSlug, suiteName, testName, "", items),
-				ExpectError: regexp.MustCompile("(?s).+"),
+				ExpectError: regexp.MustCompile("(?i)items\\.0.*invalid"),
 			},
 		},
 	})
@@ -359,6 +359,15 @@ func TestAccTestResource_validateConfig(t *testing.T) {
   }
 ]`
 
+	anthropicMessageBothItems := `[
+  {
+    type           = "anthropic_message"
+    role           = "user"
+    content        = "Hello"
+    content_blocks = jsonencode([{ type = "text", text = "Hi" }])
+  }
+]`
+
 	anthropicMessageUnexpectedItems := `[
   {
     type    = "anthropic_message"
@@ -398,6 +407,10 @@ func TestAccTestResource_validateConfig(t *testing.T) {
 			},
 			{
 				Config:      testAccTestResourceConfig(orgName, orgSlug, suiteName, testName, "", anthropicMessageMissingItems),
+				ExpectError: regexp.MustCompile("content_blocks|content"),
+			},
+			{
+				Config:      testAccTestResourceConfig(orgName, orgSlug, suiteName, testName, "", anthropicMessageBothItems),
 				ExpectError: regexp.MustCompile("content_blocks|content"),
 			},
 			{

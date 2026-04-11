@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -223,15 +224,28 @@ func ParseAnthropicMessageContent(item TestItem) (AnthropicMessageContent, error
 	if err := json.Unmarshal(item.Content, &payload); err != nil {
 		return AnthropicMessageContent{}, err
 	}
-	var textContent string
-	if err := json.Unmarshal(payload.Content, &textContent); err == nil {
+
+	trimmed := bytes.TrimLeft(payload.Content, " \t\r\n")
+	if len(trimmed) == 0 {
+		return AnthropicMessageContent{}, fmt.Errorf("anthropic_message content must be a JSON string or array")
+	}
+
+	switch trimmed[0] {
+	case '"':
+		var textContent string
+		if err := json.Unmarshal(payload.Content, &textContent); err != nil {
+			return AnthropicMessageContent{}, fmt.Errorf("anthropic_message string content: %w", err)
+		}
 		return AnthropicMessageContent{Role: payload.Role, Content: textContent}, nil
+	case '[':
+		var blocks []json.RawMessage
+		if err := json.Unmarshal(payload.Content, &blocks); err != nil {
+			return AnthropicMessageContent{}, fmt.Errorf("anthropic_message content must be a JSON string or array: %w", err)
+		}
+		return AnthropicMessageContent{Role: payload.Role, ContentBlocks: payload.Content}, nil
+	default:
+		return AnthropicMessageContent{}, fmt.Errorf("anthropic_message content must be a JSON string or array")
 	}
-	var blocks []json.RawMessage
-	if err := json.Unmarshal(payload.Content, &blocks); err != nil {
-		return AnthropicMessageContent{}, err
-	}
-	return AnthropicMessageContent{Role: payload.Role, ContentBlocks: payload.Content}, nil
 }
 
 func (c *Client) CreateTest(ctx context.Context, orgID, suiteID, name, description string, items []TestItem) (*Test, error) {
