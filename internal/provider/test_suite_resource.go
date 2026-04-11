@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/agynio/terraform-provider-testllm/internal/client"
@@ -30,6 +32,7 @@ type testSuiteResourceModel struct {
 	OrgID       types.String `tfsdk:"org_id"`
 	Name        types.String `tfsdk:"name"`
 	Description types.String `tfsdk:"description"`
+	Protocol    types.String `tfsdk:"protocol"`
 	CreatedAt   types.String `tfsdk:"created_at"`
 	UpdatedAt   types.String `tfsdk:"updated_at"`
 }
@@ -69,6 +72,18 @@ func (r *testSuiteResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				Computed:    true,
 				Default:     stringdefault.StaticString(""),
 			},
+			"protocol": schema.StringAttribute{
+				Description: "Protocol used by tests in the suite (openai or anthropic).",
+				Optional:    true,
+				Computed:    true,
+				Default:     stringdefault.StaticString("openai"),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.OneOf("openai", "anthropic"),
+				},
+			},
 			"created_at": schema.StringAttribute{
 				Description: "Timestamp when the test suite was created.",
 				Computed:    true,
@@ -103,7 +118,7 @@ func (r *testSuiteResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
-	suite, err := r.client.CreateTestSuite(ctx, plan.OrgID.ValueString(), plan.Name.ValueString(), plan.Description.ValueString())
+	suite, err := r.client.CreateTestSuite(ctx, plan.OrgID.ValueString(), plan.Name.ValueString(), plan.Description.ValueString(), plan.Protocol.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating test suite", err.Error())
 		return
@@ -114,6 +129,7 @@ func (r *testSuiteResource) Create(ctx context.Context, req resource.CreateReque
 		OrgID:       types.StringValue(suite.OrgID),
 		Name:        types.StringValue(suite.Name),
 		Description: types.StringValue(suite.Description),
+		Protocol:    types.StringValue(suite.Protocol),
 		CreatedAt:   types.StringValue(suite.CreatedAt),
 		UpdatedAt:   types.StringValue(suite.UpdatedAt),
 	}
@@ -143,6 +159,7 @@ func (r *testSuiteResource) Read(ctx context.Context, req resource.ReadRequest, 
 		OrgID:       types.StringValue(suite.OrgID),
 		Name:        types.StringValue(suite.Name),
 		Description: types.StringValue(suite.Description),
+		Protocol:    types.StringValue(suite.Protocol),
 		CreatedAt:   types.StringValue(suite.CreatedAt),
 		UpdatedAt:   types.StringValue(suite.UpdatedAt),
 	}
@@ -170,6 +187,7 @@ func (r *testSuiteResource) Update(ctx context.Context, req resource.UpdateReque
 		OrgID:       types.StringValue(suite.OrgID),
 		Name:        types.StringValue(suite.Name),
 		Description: types.StringValue(suite.Description),
+		Protocol:    types.StringValue(suite.Protocol),
 		CreatedAt:   types.StringValue(suite.CreatedAt),
 		UpdatedAt:   types.StringValue(suite.UpdatedAt),
 	}

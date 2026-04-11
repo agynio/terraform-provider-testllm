@@ -52,6 +52,30 @@ type MessageContent struct {
 	Repeat     bool
 }
 
+type anthropicSystemTextContent struct {
+	Text string `json:"text"`
+}
+
+type anthropicSystemBlocksContent struct {
+	Blocks json.RawMessage `json:"blocks"`
+}
+
+type AnthropicSystemContent struct {
+	Text   string
+	Blocks json.RawMessage
+}
+
+type anthropicMessageContent struct {
+	Role    string          `json:"role"`
+	Content json.RawMessage `json:"content"`
+}
+
+type AnthropicMessageContent struct {
+	Role          string
+	Content       string
+	ContentBlocks json.RawMessage
+}
+
 type functionCallContent struct {
 	CallID    string `json:"call_id"`
 	Name      string `json:"name"`
@@ -98,6 +122,42 @@ func NewFunctionCallOutputItem(callID, output string) (TestItem, error) {
 	return TestItem{Type: "function_call_output", Content: payload}, nil
 }
 
+func NewAnthropicSystemTextItem(text string) (TestItem, error) {
+	payload, err := json.Marshal(anthropicSystemTextContent{Text: text})
+	if err != nil {
+		return TestItem{}, err
+	}
+	return TestItem{Type: "anthropic_system", Content: payload}, nil
+}
+
+func NewAnthropicSystemBlocksItem(blocksJSON json.RawMessage) (TestItem, error) {
+	payload, err := json.Marshal(anthropicSystemBlocksContent{Blocks: blocksJSON})
+	if err != nil {
+		return TestItem{}, err
+	}
+	return TestItem{Type: "anthropic_system", Content: payload}, nil
+}
+
+func NewAnthropicMessageStringItem(role, content string) (TestItem, error) {
+	contentPayload, err := json.Marshal(content)
+	if err != nil {
+		return TestItem{}, err
+	}
+	payload, err := json.Marshal(anthropicMessageContent{Role: role, Content: json.RawMessage(contentPayload)})
+	if err != nil {
+		return TestItem{}, err
+	}
+	return TestItem{Type: "anthropic_message", Content: payload}, nil
+}
+
+func NewAnthropicMessageBlocksItem(role string, blocksJSON json.RawMessage) (TestItem, error) {
+	payload, err := json.Marshal(anthropicMessageContent{Role: role, Content: blocksJSON})
+	if err != nil {
+		return TestItem{}, err
+	}
+	return TestItem{Type: "anthropic_message", Content: payload}, nil
+}
+
 func ParseMessageContent(item TestItem) (MessageContent, error) {
 	var payload messageContent
 	if err := json.Unmarshal(item.Content, &payload); err != nil {
@@ -133,6 +193,45 @@ func ParseFunctionCallOutputContent(item TestItem) (string, string, error) {
 		return "", "", err
 	}
 	return payload.CallID, payload.Output, nil
+}
+
+func ParseAnthropicSystemContent(item TestItem) (AnthropicSystemContent, error) {
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(item.Content, &payload); err != nil {
+		return AnthropicSystemContent{}, err
+	}
+	textPayload, hasText := payload["text"]
+	blocksPayload, hasBlocks := payload["blocks"]
+	if hasText && hasBlocks {
+		return AnthropicSystemContent{}, fmt.Errorf("anthropic_system content must include either text or blocks")
+	}
+	if hasText {
+		var text string
+		if err := json.Unmarshal(textPayload, &text); err != nil {
+			return AnthropicSystemContent{}, err
+		}
+		return AnthropicSystemContent{Text: text}, nil
+	}
+	if hasBlocks {
+		return AnthropicSystemContent{Blocks: blocksPayload}, nil
+	}
+	return AnthropicSystemContent{}, fmt.Errorf("anthropic_system content missing text or blocks")
+}
+
+func ParseAnthropicMessageContent(item TestItem) (AnthropicMessageContent, error) {
+	var payload anthropicMessageContent
+	if err := json.Unmarshal(item.Content, &payload); err != nil {
+		return AnthropicMessageContent{}, err
+	}
+	var textContent string
+	if err := json.Unmarshal(payload.Content, &textContent); err == nil {
+		return AnthropicMessageContent{Role: payload.Role, Content: textContent}, nil
+	}
+	var blocks []json.RawMessage
+	if err := json.Unmarshal(payload.Content, &blocks); err != nil {
+		return AnthropicMessageContent{}, err
+	}
+	return AnthropicMessageContent{Role: payload.Role, ContentBlocks: payload.Content}, nil
 }
 
 func (c *Client) CreateTest(ctx context.Context, orgID, suiteID, name, description string, items []TestItem) (*Test, error) {

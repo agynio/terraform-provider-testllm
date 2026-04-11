@@ -147,6 +147,156 @@ func TestAccTestResource_messageFlags(t *testing.T) {
 	})
 }
 
+func TestAccTestResource_anthropicSimple(t *testing.T) {
+	orgName := acctest.RandomWithPrefix("tf-org")
+	orgSlug := acctest.RandomWithPrefix("tf-org")
+	suiteName := acctest.RandomWithPrefix("tf-suite")
+	testName := acctest.RandomWithPrefix("tf-test")
+
+	items := `[
+  {
+    type = "anthropic_system"
+    text = "You are a helpful assistant."
+  },
+  {
+    type    = "anthropic_message"
+    role    = "user"
+    content = "Hello"
+  },
+  {
+    type           = "anthropic_message"
+    role           = "assistant"
+    content_blocks = jsonencode([{ type = "text", text = "Hi there!" }])
+  },
+]`
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccAnthropicTestResourceConfig(orgName, orgSlug, suiteName, testName, "", items),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("testllm_test.test", "items.0.type", "anthropic_system"),
+					resource.TestCheckResourceAttr("testllm_test.test", "items.0.text", "You are a helpful assistant."),
+					resource.TestCheckResourceAttr("testllm_test.test", "items.1.role", "user"),
+					resource.TestCheckResourceAttr("testllm_test.test", "items.1.content", "Hello"),
+					resource.TestCheckResourceAttrSet("testllm_test.test", "items.2.content_blocks"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccTestResource_anthropicToolUse(t *testing.T) {
+	orgName := acctest.RandomWithPrefix("tf-org")
+	orgSlug := acctest.RandomWithPrefix("tf-org")
+	suiteName := acctest.RandomWithPrefix("tf-suite")
+	testName := acctest.RandomWithPrefix("tf-test")
+
+	items := `[
+  {
+    type           = "anthropic_system"
+    content_blocks = jsonencode([{ type = "text", text = "Use tools when needed." }])
+  },
+  {
+    type    = "anthropic_message"
+    role    = "user"
+    content = "Lookup weather"
+  },
+  {
+    type           = "anthropic_message"
+    role           = "assistant"
+    content_blocks = jsonencode([
+      {
+        type  = "tool_use"
+        id    = "tool-1"
+        name  = "get_weather"
+        input = { location = "Portland" }
+      }
+    ])
+  },
+  {
+    type           = "anthropic_message"
+    role           = "assistant"
+    content_blocks = jsonencode([
+      {
+        type        = "tool_result"
+        tool_use_id = "tool-1"
+        content     = "Sunny"
+      }
+    ])
+  },
+]`
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccAnthropicTestResourceConfig(orgName, orgSlug, suiteName, testName, "", items),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("testllm_test.test", "items.0.type", "anthropic_system"),
+					resource.TestCheckResourceAttr("testllm_test.test", "items.1.role", "user"),
+					resource.TestCheckResourceAttrSet("testllm_test.test", "items.2.content_blocks"),
+					resource.TestCheckResourceAttrSet("testllm_test.test", "items.3.content_blocks"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccTestResource_crossProtocolAnthropicInOpenAI(t *testing.T) {
+	orgName := acctest.RandomWithPrefix("tf-org")
+	orgSlug := acctest.RandomWithPrefix("tf-org")
+	suiteName := acctest.RandomWithPrefix("tf-suite")
+	testName := acctest.RandomWithPrefix("tf-test")
+
+	items := `[
+  {
+    type = "anthropic_system"
+    text = "You are a helpful assistant."
+  }
+]`
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccTestResourceConfig(orgName, orgSlug, suiteName, testName, "", items),
+				ExpectError: regexp.MustCompile("(?s).+"),
+			},
+		},
+	})
+}
+
+func TestAccTestResource_crossProtocolOpenAIInAnthropic(t *testing.T) {
+	orgName := acctest.RandomWithPrefix("tf-org")
+	orgSlug := acctest.RandomWithPrefix("tf-org")
+	suiteName := acctest.RandomWithPrefix("tf-suite")
+	testName := acctest.RandomWithPrefix("tf-test")
+
+	items := `[
+  {
+    type    = "message"
+    role    = "user"
+    content = "Say hello"
+  }
+]`
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccAnthropicTestResourceConfig(orgName, orgSlug, suiteName, testName, "", items),
+				ExpectError: regexp.MustCompile("(?s).+"),
+			},
+		},
+	})
+}
+
 func TestAccTestResource_validateConfig(t *testing.T) {
 	orgName := acctest.RandomWithPrefix("tf-org")
 	orgSlug := acctest.RandomWithPrefix("tf-org")
@@ -188,6 +338,36 @@ func TestAccTestResource_validateConfig(t *testing.T) {
   }
 ]`
 
+	anthropicSystemMissingItems := `[
+  {
+    type = "anthropic_system"
+  }
+]`
+
+	anthropicSystemBothItems := `[
+  {
+    type           = "anthropic_system"
+    text           = "Hello"
+    content_blocks = jsonencode([{ type = "text", text = "Hi" }])
+  }
+]`
+
+	anthropicMessageMissingItems := `[
+  {
+    type = "anthropic_message"
+    role = "user"
+  }
+]`
+
+	anthropicMessageUnexpectedItems := `[
+  {
+    type    = "anthropic_message"
+    role    = "user"
+    content = "Hello"
+    call_id = "nope"
+  }
+]`
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -208,6 +388,22 @@ func TestAccTestResource_validateConfig(t *testing.T) {
 				Config:      testAccTestResourceConfig(orgName, orgSlug, suiteName, testName, "", invalidBoolItems),
 				ExpectError: regexp.MustCompile("any_role"),
 			},
+			{
+				Config:      testAccTestResourceConfig(orgName, orgSlug, suiteName, testName, "", anthropicSystemMissingItems),
+				ExpectError: regexp.MustCompile("content_blocks|text"),
+			},
+			{
+				Config:      testAccTestResourceConfig(orgName, orgSlug, suiteName, testName, "", anthropicSystemBothItems),
+				ExpectError: regexp.MustCompile("content_blocks|text"),
+			},
+			{
+				Config:      testAccTestResourceConfig(orgName, orgSlug, suiteName, testName, "", anthropicMessageMissingItems),
+				ExpectError: regexp.MustCompile("content_blocks|content"),
+			},
+			{
+				Config:      testAccTestResourceConfig(orgName, orgSlug, suiteName, testName, "", anthropicMessageUnexpectedItems),
+				ExpectError: regexp.MustCompile("call_id"),
+			},
 		},
 	})
 }
@@ -224,6 +420,31 @@ resource "testllm_organization" "test" {
 resource "testllm_test_suite" "test" {
   org_id = testllm_organization.test.id
   name   = %q
+}
+
+resource "testllm_test" "test" {
+  org_id      = testllm_organization.test.id
+  suite_id    = testllm_test_suite.test.id
+  name        = %q
+  description = %q
+  items       = %s
+}
+`, testAccProviderConfig(), orgName, orgSlug, suiteName, testName, description, items)
+}
+
+func testAccAnthropicTestResourceConfig(orgName, orgSlug, suiteName, testName, description, items string) string {
+	return fmt.Sprintf(`
+%s
+
+resource "testllm_organization" "test" {
+  name = %q
+  slug = %q
+}
+
+resource "testllm_test_suite" "test" {
+  org_id   = testllm_organization.test.id
+  name     = %q
+  protocol = "anthropic"
 }
 
 resource "testllm_test" "test" {
