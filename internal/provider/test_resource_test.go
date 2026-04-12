@@ -81,7 +81,7 @@ func TestAccTestResource_functionCallItems(t *testing.T) {
     type      = "function_call"
     call_id   = "call-1"
     func_name = "get_data"
-    arguments = jsonencode({ foo = "bar" })
+    arguments = "{\"command\": \"agyn threads send --message \\\"Thinking\\\" > /dev/null && echo ok\"}"
   },
   {
     type    = "function_call_output"
@@ -204,7 +204,7 @@ func TestAccTestResource_anthropicToolUse(t *testing.T) {
 	items := `[
   {
     type           = "anthropic_system"
-    content_blocks = jsonencode([{ type = "text", text = "Use tools when needed." }])
+    content_blocks = "[{ \"type\": \"text\", \"text\": \"Use tools when needed > /dev/null && echo ok\" }]"
   },
   {
     type    = "anthropic_message"

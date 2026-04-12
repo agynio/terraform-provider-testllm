@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -44,23 +44,29 @@ type testResourceModel struct {
 }
 
 type testItemModel struct {
-	Type          types.String `tfsdk:"type"`
-	Role          types.String `tfsdk:"role"`
-	Content       types.String `tfsdk:"content"`
-	Text          types.String `tfsdk:"text"`
-	ContentBlocks types.String `tfsdk:"content_blocks"`
-	AnyRole       types.Bool   `tfsdk:"any_role"`
-	AnyContent    types.Bool   `tfsdk:"any_content"`
-	Repeat        types.Bool   `tfsdk:"repeat"`
-	CallID        types.String `tfsdk:"call_id"`
-	FuncName      types.String `tfsdk:"func_name"`
-	Arguments     types.String `tfsdk:"arguments"`
-	Output        types.String `tfsdk:"output"`
+	Type          types.String         `tfsdk:"type"`
+	Role          types.String         `tfsdk:"role"`
+	Content       types.String         `tfsdk:"content"`
+	Text          types.String         `tfsdk:"text"`
+	ContentBlocks jsontypes.Normalized `tfsdk:"content_blocks"`
+	AnyRole       types.Bool           `tfsdk:"any_role"`
+	AnyContent    types.Bool           `tfsdk:"any_content"`
+	Repeat        types.Bool           `tfsdk:"repeat"`
+	CallID        types.String         `tfsdk:"call_id"`
+	FuncName      types.String         `tfsdk:"func_name"`
+	Arguments     jsontypes.Normalized `tfsdk:"arguments"`
+	Output        types.String         `tfsdk:"output"`
+}
+
+type stringValue interface {
+	IsNull() bool
+	IsUnknown() bool
+	ValueString() string
 }
 
 type itemFieldRule struct {
 	Name     string
-	Getter   func(testItemModel) types.String
+	Getter   func(testItemModel) stringValue
 	Required bool
 }
 
@@ -71,50 +77,50 @@ type itemBoolFieldRule struct {
 
 var testItemValidationRules = map[string][]itemFieldRule{
 	"message": {
-		{Name: "role", Getter: func(item testItemModel) types.String { return item.Role }, Required: true},
-		{Name: "content", Getter: func(item testItemModel) types.String { return item.Content }, Required: true},
-		{Name: "call_id", Getter: func(item testItemModel) types.String { return item.CallID }},
-		{Name: "func_name", Getter: func(item testItemModel) types.String { return item.FuncName }},
-		{Name: "arguments", Getter: func(item testItemModel) types.String { return item.Arguments }},
-		{Name: "output", Getter: func(item testItemModel) types.String { return item.Output }},
-		{Name: "text", Getter: func(item testItemModel) types.String { return item.Text }},
-		{Name: "content_blocks", Getter: func(item testItemModel) types.String { return item.ContentBlocks }},
+		{Name: "role", Getter: func(item testItemModel) stringValue { return item.Role }, Required: true},
+		{Name: "content", Getter: func(item testItemModel) stringValue { return item.Content }, Required: true},
+		{Name: "call_id", Getter: func(item testItemModel) stringValue { return item.CallID }},
+		{Name: "func_name", Getter: func(item testItemModel) stringValue { return item.FuncName }},
+		{Name: "arguments", Getter: func(item testItemModel) stringValue { return item.Arguments }},
+		{Name: "output", Getter: func(item testItemModel) stringValue { return item.Output }},
+		{Name: "text", Getter: func(item testItemModel) stringValue { return item.Text }},
+		{Name: "content_blocks", Getter: func(item testItemModel) stringValue { return item.ContentBlocks }},
 	},
 	"function_call": {
-		{Name: "call_id", Getter: func(item testItemModel) types.String { return item.CallID }, Required: true},
-		{Name: "func_name", Getter: func(item testItemModel) types.String { return item.FuncName }, Required: true},
-		{Name: "arguments", Getter: func(item testItemModel) types.String { return item.Arguments }, Required: true},
-		{Name: "role", Getter: func(item testItemModel) types.String { return item.Role }},
-		{Name: "content", Getter: func(item testItemModel) types.String { return item.Content }},
-		{Name: "output", Getter: func(item testItemModel) types.String { return item.Output }},
-		{Name: "text", Getter: func(item testItemModel) types.String { return item.Text }},
-		{Name: "content_blocks", Getter: func(item testItemModel) types.String { return item.ContentBlocks }},
+		{Name: "call_id", Getter: func(item testItemModel) stringValue { return item.CallID }, Required: true},
+		{Name: "func_name", Getter: func(item testItemModel) stringValue { return item.FuncName }, Required: true},
+		{Name: "arguments", Getter: func(item testItemModel) stringValue { return item.Arguments }, Required: true},
+		{Name: "role", Getter: func(item testItemModel) stringValue { return item.Role }},
+		{Name: "content", Getter: func(item testItemModel) stringValue { return item.Content }},
+		{Name: "output", Getter: func(item testItemModel) stringValue { return item.Output }},
+		{Name: "text", Getter: func(item testItemModel) stringValue { return item.Text }},
+		{Name: "content_blocks", Getter: func(item testItemModel) stringValue { return item.ContentBlocks }},
 	},
 	"function_call_output": {
-		{Name: "call_id", Getter: func(item testItemModel) types.String { return item.CallID }, Required: true},
-		{Name: "output", Getter: func(item testItemModel) types.String { return item.Output }, Required: true},
-		{Name: "role", Getter: func(item testItemModel) types.String { return item.Role }},
-		{Name: "content", Getter: func(item testItemModel) types.String { return item.Content }},
-		{Name: "func_name", Getter: func(item testItemModel) types.String { return item.FuncName }},
-		{Name: "arguments", Getter: func(item testItemModel) types.String { return item.Arguments }},
-		{Name: "text", Getter: func(item testItemModel) types.String { return item.Text }},
-		{Name: "content_blocks", Getter: func(item testItemModel) types.String { return item.ContentBlocks }},
+		{Name: "call_id", Getter: func(item testItemModel) stringValue { return item.CallID }, Required: true},
+		{Name: "output", Getter: func(item testItemModel) stringValue { return item.Output }, Required: true},
+		{Name: "role", Getter: func(item testItemModel) stringValue { return item.Role }},
+		{Name: "content", Getter: func(item testItemModel) stringValue { return item.Content }},
+		{Name: "func_name", Getter: func(item testItemModel) stringValue { return item.FuncName }},
+		{Name: "arguments", Getter: func(item testItemModel) stringValue { return item.Arguments }},
+		{Name: "text", Getter: func(item testItemModel) stringValue { return item.Text }},
+		{Name: "content_blocks", Getter: func(item testItemModel) stringValue { return item.ContentBlocks }},
 	},
 	"anthropic_system": {
-		{Name: "role", Getter: func(item testItemModel) types.String { return item.Role }},
-		{Name: "content", Getter: func(item testItemModel) types.String { return item.Content }},
-		{Name: "call_id", Getter: func(item testItemModel) types.String { return item.CallID }},
-		{Name: "func_name", Getter: func(item testItemModel) types.String { return item.FuncName }},
-		{Name: "arguments", Getter: func(item testItemModel) types.String { return item.Arguments }},
-		{Name: "output", Getter: func(item testItemModel) types.String { return item.Output }},
+		{Name: "role", Getter: func(item testItemModel) stringValue { return item.Role }},
+		{Name: "content", Getter: func(item testItemModel) stringValue { return item.Content }},
+		{Name: "call_id", Getter: func(item testItemModel) stringValue { return item.CallID }},
+		{Name: "func_name", Getter: func(item testItemModel) stringValue { return item.FuncName }},
+		{Name: "arguments", Getter: func(item testItemModel) stringValue { return item.Arguments }},
+		{Name: "output", Getter: func(item testItemModel) stringValue { return item.Output }},
 	},
 	"anthropic_message": {
-		{Name: "role", Getter: func(item testItemModel) types.String { return item.Role }, Required: true},
-		{Name: "text", Getter: func(item testItemModel) types.String { return item.Text }},
-		{Name: "call_id", Getter: func(item testItemModel) types.String { return item.CallID }},
-		{Name: "func_name", Getter: func(item testItemModel) types.String { return item.FuncName }},
-		{Name: "arguments", Getter: func(item testItemModel) types.String { return item.Arguments }},
-		{Name: "output", Getter: func(item testItemModel) types.String { return item.Output }},
+		{Name: "role", Getter: func(item testItemModel) stringValue { return item.Role }, Required: true},
+		{Name: "text", Getter: func(item testItemModel) stringValue { return item.Text }},
+		{Name: "call_id", Getter: func(item testItemModel) stringValue { return item.CallID }},
+		{Name: "func_name", Getter: func(item testItemModel) stringValue { return item.FuncName }},
+		{Name: "arguments", Getter: func(item testItemModel) stringValue { return item.Arguments }},
+		{Name: "output", Getter: func(item testItemModel) stringValue { return item.Output }},
 	},
 }
 
@@ -195,6 +201,7 @@ func (r *testResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 						},
 						"content_blocks": schema.StringAttribute{
 							Description: "JSON-encoded array of Anthropic content blocks.",
+							CustomType:  jsontypes.NormalizedType{},
 							Optional:    true,
 						},
 						"any_role": schema.BoolAttribute{
@@ -225,6 +232,7 @@ func (r *testResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 						},
 						"arguments": schema.StringAttribute{
 							Description: "JSON-encoded arguments for function_call items.",
+							CustomType:  jsontypes.NormalizedType{},
 							Optional:    true,
 						},
 						"output": schema.StringAttribute{
@@ -500,7 +508,7 @@ func (r *testResource) ImportState(ctx context.Context, req resource.ImportState
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[2])...)
 }
 
-func validateRequiredString(diags *diag.Diagnostics, value types.String, attrPath path.Path, itemType string) {
+func validateRequiredString(diags *diag.Diagnostics, value stringValue, attrPath path.Path, itemType string) {
 	if value.IsUnknown() {
 		return
 	}
@@ -509,14 +517,14 @@ func validateRequiredString(diags *diag.Diagnostics, value types.String, attrPat
 	}
 }
 
-func validateUnexpectedString(diags *diag.Diagnostics, value types.String, attrPath path.Path, itemType string) {
+func validateUnexpectedString(diags *diag.Diagnostics, value stringValue, attrPath path.Path, itemType string) {
 	if value.IsUnknown() || value.IsNull() {
 		return
 	}
 	diags.AddAttributeError(attrPath, "Unexpected item attribute", fmt.Sprintf("%s must not be set when type is %q.", attrPath.String(), itemType))
 }
 
-func validateContentBlocks(diags *diag.Diagnostics, value types.String, attrPath path.Path) {
+func validateContentBlocks(diags *diag.Diagnostics, value stringValue, attrPath path.Path) {
 	if value.IsUnknown() || value.IsNull() {
 		return
 	}
@@ -540,35 +548,6 @@ func validateContentBlocks(diags *diag.Diagnostics, value types.String, attrPath
 			return
 		}
 	}
-}
-
-func normalizeJSON(value string) (string, error) {
-	decoder := json.NewDecoder(strings.NewReader(value))
-	decoder.UseNumber()
-	var payload interface{}
-	if err := decoder.Decode(&payload); err != nil {
-		return "", err
-	}
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		if err == nil {
-			return "", fmt.Errorf("unexpected trailing data")
-		}
-		return "", err
-	}
-	normalized, err := json.Marshal(payload)
-	if err != nil {
-		return "", err
-	}
-	return string(normalized), nil
-}
-
-func normalizeJSONAttr(value string, attrPath path.Path, diags *diag.Diagnostics, summary string) (string, bool) {
-	normalized, err := normalizeJSON(value)
-	if err != nil {
-		diags.AddAttributeError(attrPath, summary, fmt.Sprintf("%s must be valid JSON: %s.", attrPath.String(), err.Error()))
-		return "", false
-	}
-	return normalized, true
 }
 
 func boolPointerFromValue(value types.Bool) *bool {
@@ -605,12 +584,7 @@ func expandTestItems(items []testItemModel) ([]client.TestItem, diag.Diagnostics
 			}
 			expanded = append(expanded, messageItem)
 		case "function_call":
-			attrPath := path.Root("items").AtListIndex(index).AtName("arguments")
-			arguments, ok := normalizeJSONAttr(item.Arguments.ValueString(), attrPath, &diags, "Invalid arguments")
-			if !ok {
-				return nil, diags
-			}
-			callItem, err := client.NewFunctionCallItem(item.CallID.ValueString(), item.FuncName.ValueString(), arguments)
+			callItem, err := client.NewFunctionCallItem(item.CallID.ValueString(), item.FuncName.ValueString(), item.Arguments.ValueString())
 			if err != nil {
 				diags.AddError("Error building function_call item", err.Error())
 				return nil, diags
@@ -640,12 +614,7 @@ func expandTestItems(items []testItemModel) ([]client.TestItem, diag.Diagnostics
 			if textSet {
 				systemItem, err = client.NewAnthropicSystemTextItem(item.Text.ValueString(), anyContent)
 			} else {
-				attrPath := path.Root("items").AtListIndex(index).AtName("content_blocks")
-				blocks, ok := normalizeJSONAttr(item.ContentBlocks.ValueString(), attrPath, &diags, "Invalid content_blocks")
-				if !ok {
-					return nil, diags
-				}
-				systemItem, err = client.NewAnthropicSystemBlocksItem(json.RawMessage(blocks), anyContent)
+				systemItem, err = client.NewAnthropicSystemBlocksItem(json.RawMessage(item.ContentBlocks.ValueString()), anyContent)
 			}
 			if err != nil {
 				diags.AddError("Error building anthropic_system item", err.Error())
@@ -673,12 +642,7 @@ func expandTestItems(items []testItemModel) ([]client.TestItem, diag.Diagnostics
 			if contentSet {
 				messageItem, err = client.NewAnthropicMessageStringItem(item.Role.ValueString(), item.Content.ValueString(), anyContent)
 			} else {
-				attrPath := path.Root("items").AtListIndex(index).AtName("content_blocks")
-				blocks, ok := normalizeJSONAttr(item.ContentBlocks.ValueString(), attrPath, &diags, "Invalid content_blocks")
-				if !ok {
-					return nil, diags
-				}
-				messageItem, err = client.NewAnthropicMessageBlocksItem(item.Role.ValueString(), json.RawMessage(blocks), anyContent)
+				messageItem, err = client.NewAnthropicMessageBlocksItem(item.Role.ValueString(), json.RawMessage(item.ContentBlocks.ValueString()), anyContent)
 			}
 			if err != nil {
 				diags.AddError("Error building anthropic_message item", err.Error())
@@ -714,13 +678,13 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 				Role:          types.StringValue(messageContent.Role),
 				Content:       types.StringValue(messageContent.Content),
 				Text:          types.StringNull(),
-				ContentBlocks: types.StringNull(),
+				ContentBlocks: jsontypes.NewNormalizedNull(),
 				AnyRole:       types.BoolValue(messageContent.AnyRole),
 				AnyContent:    types.BoolValue(messageContent.AnyContent),
 				Repeat:        types.BoolValue(messageContent.Repeat),
 				CallID:        types.StringNull(),
 				FuncName:      types.StringNull(),
-				Arguments:     types.StringNull(),
+				Arguments:     jsontypes.NewNormalizedNull(),
 				Output:        types.StringNull(),
 			})
 		case "function_call":
@@ -729,23 +693,18 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 				diags.AddError("Error parsing function_call item", err.Error())
 				return nil, diags
 			}
-			normalizedArguments, err := normalizeJSON(arguments)
-			if err != nil {
-				diags.AddError("Error normalizing function_call arguments", err.Error())
-				return nil, diags
-			}
 			flattened = append(flattened, testItemModel{
 				Type:          types.StringValue("function_call"),
 				Role:          types.StringNull(),
 				Content:       types.StringNull(),
 				Text:          types.StringNull(),
-				ContentBlocks: types.StringNull(),
+				ContentBlocks: jsontypes.NewNormalizedNull(),
 				AnyRole:       types.BoolValue(false),
 				AnyContent:    types.BoolValue(false),
 				Repeat:        types.BoolValue(false),
 				CallID:        types.StringValue(callID),
 				FuncName:      types.StringValue(name),
-				Arguments:     types.StringValue(normalizedArguments),
+				Arguments:     jsontypes.NewNormalizedValue(arguments),
 				Output:        types.StringNull(),
 			})
 		case "function_call_output":
@@ -759,13 +718,13 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 				Role:          types.StringNull(),
 				Content:       types.StringNull(),
 				Text:          types.StringNull(),
-				ContentBlocks: types.StringNull(),
+				ContentBlocks: jsontypes.NewNormalizedNull(),
 				AnyRole:       types.BoolValue(false),
 				AnyContent:    types.BoolValue(false),
 				Repeat:        types.BoolValue(false),
 				CallID:        types.StringValue(callID),
 				FuncName:      types.StringNull(),
-				Arguments:     types.StringNull(),
+				Arguments:     jsontypes.NewNormalizedNull(),
 				Output:        types.StringValue(output),
 			})
 		case "anthropic_system":
@@ -775,14 +734,9 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 				return nil, diags
 			}
 			textValue := types.StringNull()
-			blocksValue := types.StringNull()
+			blocksValue := jsontypes.NewNormalizedNull()
 			if systemContent.Blocks != nil {
-				blocks, err := normalizeJSON(string(systemContent.Blocks))
-				if err != nil {
-					diags.AddError("Error normalizing anthropic_system content_blocks", err.Error())
-					return nil, diags
-				}
-				blocksValue = types.StringValue(blocks)
+				blocksValue = jsontypes.NewNormalizedValue(string(systemContent.Blocks))
 			} else {
 				textValue = types.StringValue(systemContent.Text)
 			}
@@ -797,7 +751,7 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 				Repeat:        types.BoolValue(false),
 				CallID:        types.StringNull(),
 				FuncName:      types.StringNull(),
-				Arguments:     types.StringNull(),
+				Arguments:     jsontypes.NewNormalizedNull(),
 				Output:        types.StringNull(),
 			})
 		case "anthropic_message":
@@ -807,14 +761,9 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 				return nil, diags
 			}
 			contentValue := types.StringNull()
-			blocksValue := types.StringNull()
+			blocksValue := jsontypes.NewNormalizedNull()
 			if messageContent.ContentBlocks != nil {
-				blocks, err := normalizeJSON(string(messageContent.ContentBlocks))
-				if err != nil {
-					diags.AddError("Error normalizing anthropic_message content_blocks", err.Error())
-					return nil, diags
-				}
-				blocksValue = types.StringValue(blocks)
+				blocksValue = jsontypes.NewNormalizedValue(string(messageContent.ContentBlocks))
 			} else {
 				contentValue = types.StringValue(messageContent.Content)
 			}
@@ -829,7 +778,7 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 				Repeat:        types.BoolValue(false),
 				CallID:        types.StringNull(),
 				FuncName:      types.StringNull(),
-				Arguments:     types.StringNull(),
+				Arguments:     jsontypes.NewNormalizedNull(),
 				Output:        types.StringNull(),
 			})
 		default:
