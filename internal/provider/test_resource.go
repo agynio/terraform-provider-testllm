@@ -562,6 +562,15 @@ func normalizeJSON(value string) (string, error) {
 	return string(normalized), nil
 }
 
+func normalizeJSONAttr(value string, attrPath path.Path, diags *diag.Diagnostics, summary string) (string, bool) {
+	normalized, err := normalizeJSON(value)
+	if err != nil {
+		diags.AddAttributeError(attrPath, summary, fmt.Sprintf("%s must be valid JSON: %s.", attrPath.String(), err.Error()))
+		return "", false
+	}
+	return normalized, true
+}
+
 func boolPointerFromValue(value types.Bool) *bool {
 	if value.IsUnknown() || value.IsNull() || !value.ValueBool() {
 		return nil
@@ -596,13 +605,9 @@ func expandTestItems(items []testItemModel) ([]client.TestItem, diag.Diagnostics
 			}
 			expanded = append(expanded, messageItem)
 		case "function_call":
-			arguments, err := normalizeJSON(item.Arguments.ValueString())
-			if err != nil {
-				diags.AddAttributeError(
-					path.Root("items").AtListIndex(index).AtName("arguments"),
-					"Invalid arguments",
-					fmt.Sprintf("%s must be valid JSON: %s.", path.Root("items").AtListIndex(index).AtName("arguments").String(), err.Error()),
-				)
+			attrPath := path.Root("items").AtListIndex(index).AtName("arguments")
+			arguments, ok := normalizeJSONAttr(item.Arguments.ValueString(), attrPath, &diags, "Invalid arguments")
+			if !ok {
 				return nil, diags
 			}
 			callItem, err := client.NewFunctionCallItem(item.CallID.ValueString(), item.FuncName.ValueString(), arguments)
@@ -635,13 +640,9 @@ func expandTestItems(items []testItemModel) ([]client.TestItem, diag.Diagnostics
 			if textSet {
 				systemItem, err = client.NewAnthropicSystemTextItem(item.Text.ValueString(), anyContent)
 			} else {
-				blocks, err := normalizeJSON(item.ContentBlocks.ValueString())
-				if err != nil {
-					diags.AddAttributeError(
-						path.Root("items").AtListIndex(index).AtName("content_blocks"),
-						"Invalid content_blocks",
-						fmt.Sprintf("%s must be valid JSON: %s.", path.Root("items").AtListIndex(index).AtName("content_blocks").String(), err.Error()),
-					)
+				attrPath := path.Root("items").AtListIndex(index).AtName("content_blocks")
+				blocks, ok := normalizeJSONAttr(item.ContentBlocks.ValueString(), attrPath, &diags, "Invalid content_blocks")
+				if !ok {
 					return nil, diags
 				}
 				systemItem, err = client.NewAnthropicSystemBlocksItem(json.RawMessage(blocks), anyContent)
@@ -672,13 +673,9 @@ func expandTestItems(items []testItemModel) ([]client.TestItem, diag.Diagnostics
 			if contentSet {
 				messageItem, err = client.NewAnthropicMessageStringItem(item.Role.ValueString(), item.Content.ValueString(), anyContent)
 			} else {
-				blocks, err := normalizeJSON(item.ContentBlocks.ValueString())
-				if err != nil {
-					diags.AddAttributeError(
-						path.Root("items").AtListIndex(index).AtName("content_blocks"),
-						"Invalid content_blocks",
-						fmt.Sprintf("%s must be valid JSON: %s.", path.Root("items").AtListIndex(index).AtName("content_blocks").String(), err.Error()),
-					)
+				attrPath := path.Root("items").AtListIndex(index).AtName("content_blocks")
+				blocks, ok := normalizeJSONAttr(item.ContentBlocks.ValueString(), attrPath, &diags, "Invalid content_blocks")
+				if !ok {
 					return nil, diags
 				}
 				messageItem, err = client.NewAnthropicMessageBlocksItem(item.Role.ValueString(), json.RawMessage(blocks), anyContent)
