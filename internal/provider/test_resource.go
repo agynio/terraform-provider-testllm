@@ -294,14 +294,18 @@ func (r *testResource) ValidateConfig(ctx context.Context, req resource.Validate
 			if value.IsUnknown() || value.IsNull() || !value.ValueBool() {
 				continue
 			}
-			if itemType != "message" {
+			allowed := itemType == "message"
+			if rule.Name == "any_content" {
+				allowed = itemType == "message" || itemType == "anthropic_message" || itemType == "anthropic_system"
+			}
+			if !allowed {
 				resp.Diagnostics.AddAttributeError(attrPath, "Unexpected item attribute", fmt.Sprintf("%s must not be true when type is %q.", attrPath.String(), itemType))
 				continue
 			}
 			if item.Role.IsUnknown() || item.Role.IsNull() {
 				continue
 			}
-			if item.Role.ValueString() == "assistant" {
+			if item.Role.ValueString() == "assistant" && itemType == "message" {
 				resp.Diagnostics.AddAttributeError(attrPath, "Unexpected item attribute", fmt.Sprintf("%s must not be true when type is %q and role is %q.", attrPath.String(), itemType, item.Role.ValueString()))
 			}
 		}
@@ -597,10 +601,11 @@ func expandTestItems(items []testItemModel) ([]client.TestItem, diag.Diagnostics
 			}
 			var systemItem client.TestItem
 			var err error
+			anyContent := boolPointerFromValue(item.AnyContent)
 			if textSet {
-				systemItem, err = client.NewAnthropicSystemTextItem(item.Text.ValueString())
+				systemItem, err = client.NewAnthropicSystemTextItem(item.Text.ValueString(), anyContent)
 			} else {
-				systemItem, err = client.NewAnthropicSystemBlocksItem(json.RawMessage(item.ContentBlocks.ValueString()))
+				systemItem, err = client.NewAnthropicSystemBlocksItem(json.RawMessage(item.ContentBlocks.ValueString()), anyContent)
 			}
 			if err != nil {
 				diags.AddError("Error building anthropic_system item", err.Error())
@@ -624,10 +629,11 @@ func expandTestItems(items []testItemModel) ([]client.TestItem, diag.Diagnostics
 			}
 			var messageItem client.TestItem
 			var err error
+			anyContent := boolPointerFromValue(item.AnyContent)
 			if contentSet {
-				messageItem, err = client.NewAnthropicMessageStringItem(item.Role.ValueString(), item.Content.ValueString())
+				messageItem, err = client.NewAnthropicMessageStringItem(item.Role.ValueString(), item.Content.ValueString(), anyContent)
 			} else {
-				messageItem, err = client.NewAnthropicMessageBlocksItem(item.Role.ValueString(), json.RawMessage(item.ContentBlocks.ValueString()))
+				messageItem, err = client.NewAnthropicMessageBlocksItem(item.Role.ValueString(), json.RawMessage(item.ContentBlocks.ValueString()), anyContent)
 			}
 			if err != nil {
 				diags.AddError("Error building anthropic_message item", err.Error())
@@ -732,7 +738,7 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 				Text:          textValue,
 				ContentBlocks: blocksValue,
 				AnyRole:       types.BoolValue(false),
-				AnyContent:    types.BoolValue(false),
+				AnyContent:    types.BoolValue(systemContent.AnyContent),
 				Repeat:        types.BoolValue(false),
 				CallID:        types.StringNull(),
 				FuncName:      types.StringNull(),
@@ -759,7 +765,7 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 				Text:          types.StringNull(),
 				ContentBlocks: blocksValue,
 				AnyRole:       types.BoolValue(false),
-				AnyContent:    types.BoolValue(false),
+				AnyContent:    types.BoolValue(messageContent.AnyContent),
 				Repeat:        types.BoolValue(false),
 				CallID:        types.StringNull(),
 				FuncName:      types.StringNull(),
