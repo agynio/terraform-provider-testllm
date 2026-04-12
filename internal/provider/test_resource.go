@@ -305,7 +305,7 @@ func (r *testResource) ValidateConfig(ctx context.Context, req resource.Validate
 			if item.Role.IsUnknown() || item.Role.IsNull() {
 				continue
 			}
-			if item.Role.ValueString() == "assistant" {
+			if item.Role.ValueString() == "assistant" && itemType == "message" {
 				resp.Diagnostics.AddAttributeError(attrPath, "Unexpected item attribute", fmt.Sprintf("%s must not be true when type is %q and role is %q.", attrPath.String(), itemType, item.Role.ValueString()))
 			}
 		}
