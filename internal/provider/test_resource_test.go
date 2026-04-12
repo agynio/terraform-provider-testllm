@@ -90,18 +90,25 @@ func TestAccTestResource_functionCallItems(t *testing.T) {
   },
 ]`
 
+	config := testAccTestResourceConfig(orgName, orgSlug, suiteName, testName, "", items)
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccTestResourceConfig(orgName, orgSlug, suiteName, testName, "", items),
+				Config: config,
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("testllm_test.test", "items.0.type", "function_call"),
 					resource.TestCheckResourceAttr("testllm_test.test", "items.0.func_name", "get_data"),
 					resource.TestCheckResourceAttr("testllm_test.test", "items.1.type", "function_call_output"),
 					resource.TestCheckResourceAttr("testllm_test.test", "items.1.output", "done"),
 				),
+			},
+			{
+				Config:             config,
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: false,
 			},
 		},
 	})
@@ -229,18 +236,25 @@ func TestAccTestResource_anthropicToolUse(t *testing.T) {
   },
 ]`
 
+	config := testAccAnthropicTestResourceConfig(orgName, orgSlug, suiteName, testName, "", items)
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccAnthropicTestResourceConfig(orgName, orgSlug, suiteName, testName, "", items),
+				Config: config,
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("testllm_test.test", "items.0.type", "anthropic_system"),
 					resource.TestCheckResourceAttr("testllm_test.test", "items.1.role", "user"),
 					resource.TestCheckResourceAttrSet("testllm_test.test", "items.2.content_blocks"),
 					resource.TestCheckResourceAttrSet("testllm_test.test", "items.3.content_blocks"),
 				),
+			},
+			{
+				Config:             config,
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: false,
 			},
 		},
 	})

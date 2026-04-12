@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -541,6 +542,35 @@ func validateContentBlocks(diags *diag.Diagnostics, value types.String, attrPath
 	}
 }
 
+func normalizeJSON(value string) (string, error) {
+	decoder := json.NewDecoder(strings.NewReader(value))
+	decoder.UseNumber()
+	var payload interface{}
+	if err := decoder.Decode(&payload); err != nil {
+		return "", err
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		if err == nil {
+			return "", fmt.Errorf("unexpected trailing data")
+		}
+		return "", err
+	}
+	normalized, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+	return string(normalized), nil
+}
+
+func normalizeJSONAttr(value string, attrPath path.Path, diags *diag.Diagnostics, summary string) (string, bool) {
+	normalized, err := normalizeJSON(value)
+	if err != nil {
+		diags.AddAttributeError(attrPath, summary, fmt.Sprintf("%s must be valid JSON: %s.", attrPath.String(), err.Error()))
+		return "", false
+	}
+	return normalized, true
+}
+
 func boolPointerFromValue(value types.Bool) *bool {
 	if value.IsUnknown() || value.IsNull() || !value.ValueBool() {
 		return nil
@@ -575,7 +605,12 @@ func expandTestItems(items []testItemModel) ([]client.TestItem, diag.Diagnostics
 			}
 			expanded = append(expanded, messageItem)
 		case "function_call":
-			callItem, err := client.NewFunctionCallItem(item.CallID.ValueString(), item.FuncName.ValueString(), item.Arguments.ValueString())
+			attrPath := path.Root("items").AtListIndex(index).AtName("arguments")
+			arguments, ok := normalizeJSONAttr(item.Arguments.ValueString(), attrPath, &diags, "Invalid arguments")
+			if !ok {
+				return nil, diags
+			}
+			callItem, err := client.NewFunctionCallItem(item.CallID.ValueString(), item.FuncName.ValueString(), arguments)
 			if err != nil {
 				diags.AddError("Error building function_call item", err.Error())
 				return nil, diags
@@ -605,7 +640,12 @@ func expandTestItems(items []testItemModel) ([]client.TestItem, diag.Diagnostics
 			if textSet {
 				systemItem, err = client.NewAnthropicSystemTextItem(item.Text.ValueString(), anyContent)
 			} else {
-				systemItem, err = client.NewAnthropicSystemBlocksItem(json.RawMessage(item.ContentBlocks.ValueString()), anyContent)
+				attrPath := path.Root("items").AtListIndex(index).AtName("content_blocks")
+				blocks, ok := normalizeJSONAttr(item.ContentBlocks.ValueString(), attrPath, &diags, "Invalid content_blocks")
+				if !ok {
+					return nil, diags
+				}
+				systemItem, err = client.NewAnthropicSystemBlocksItem(json.RawMessage(blocks), anyContent)
 			}
 			if err != nil {
 				diags.AddError("Error building anthropic_system item", err.Error())
@@ -633,7 +673,12 @@ func expandTestItems(items []testItemModel) ([]client.TestItem, diag.Diagnostics
 			if contentSet {
 				messageItem, err = client.NewAnthropicMessageStringItem(item.Role.ValueString(), item.Content.ValueString(), anyContent)
 			} else {
-				messageItem, err = client.NewAnthropicMessageBlocksItem(item.Role.ValueString(), json.RawMessage(item.ContentBlocks.ValueString()), anyContent)
+				attrPath := path.Root("items").AtListIndex(index).AtName("content_blocks")
+				blocks, ok := normalizeJSONAttr(item.ContentBlocks.ValueString(), attrPath, &diags, "Invalid content_blocks")
+				if !ok {
+					return nil, diags
+				}
+				messageItem, err = client.NewAnthropicMessageBlocksItem(item.Role.ValueString(), json.RawMessage(blocks), anyContent)
 			}
 			if err != nil {
 				diags.AddError("Error building anthropic_message item", err.Error())
@@ -684,6 +729,11 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 				diags.AddError("Error parsing function_call item", err.Error())
 				return nil, diags
 			}
+			normalizedArguments, err := normalizeJSON(arguments)
+			if err != nil {
+				diags.AddError("Error normalizing function_call arguments", err.Error())
+				return nil, diags
+			}
 			flattened = append(flattened, testItemModel{
 				Type:          types.StringValue("function_call"),
 				Role:          types.StringNull(),
@@ -695,7 +745,7 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 				Repeat:        types.BoolValue(false),
 				CallID:        types.StringValue(callID),
 				FuncName:      types.StringValue(name),
-				Arguments:     types.StringValue(arguments),
+				Arguments:     types.StringValue(normalizedArguments),
 				Output:        types.StringNull(),
 			})
 		case "function_call_output":
@@ -727,7 +777,12 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 			textValue := types.StringNull()
 			blocksValue := types.StringNull()
 			if systemContent.Blocks != nil {
-				blocksValue = types.StringValue(string(systemContent.Blocks))
+				blocks, err := normalizeJSON(string(systemContent.Blocks))
+				if err != nil {
+					diags.AddError("Error normalizing anthropic_system content_blocks", err.Error())
+					return nil, diags
+				}
+				blocksValue = types.StringValue(blocks)
 			} else {
 				textValue = types.StringValue(systemContent.Text)
 			}
@@ -754,7 +809,12 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 			contentValue := types.StringNull()
 			blocksValue := types.StringNull()
 			if messageContent.ContentBlocks != nil {
-				blocksValue = types.StringValue(string(messageContent.ContentBlocks))
+				blocks, err := normalizeJSON(string(messageContent.ContentBlocks))
+				if err != nil {
+					diags.AddError("Error normalizing anthropic_message content_blocks", err.Error())
+					return nil, diags
+				}
+				blocksValue = types.StringValue(blocks)
 			} else {
 				contentValue = types.StringValue(messageContent.Content)
 			}
