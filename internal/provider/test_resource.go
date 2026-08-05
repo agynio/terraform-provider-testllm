@@ -44,18 +44,19 @@ type testResourceModel struct {
 }
 
 type testItemModel struct {
-	Type          types.String         `tfsdk:"type"`
-	Role          types.String         `tfsdk:"role"`
-	Content       types.String         `tfsdk:"content"`
-	Text          types.String         `tfsdk:"text"`
-	ContentBlocks jsontypes.Normalized `tfsdk:"content_blocks"`
-	AnyRole       types.Bool           `tfsdk:"any_role"`
-	AnyContent    types.Bool           `tfsdk:"any_content"`
-	Repeat        types.Bool           `tfsdk:"repeat"`
-	CallID        types.String         `tfsdk:"call_id"`
-	FuncName      types.String         `tfsdk:"func_name"`
-	Arguments     jsontypes.Normalized `tfsdk:"arguments"`
-	Output        types.String         `tfsdk:"output"`
+	Type            types.String         `tfsdk:"type"`
+	Role            types.String         `tfsdk:"role"`
+	Content         types.String         `tfsdk:"content"`
+	Text            types.String         `tfsdk:"text"`
+	ContentBlocks   jsontypes.Normalized `tfsdk:"content_blocks"`
+	AnyRole         types.Bool           `tfsdk:"any_role"`
+	AnyContent      types.Bool           `tfsdk:"any_content"`
+	ContentContains types.String         `tfsdk:"content_contains"`
+	Repeat          types.Bool           `tfsdk:"repeat"`
+	CallID          types.String         `tfsdk:"call_id"`
+	FuncName        types.String         `tfsdk:"func_name"`
+	Arguments       jsontypes.Normalized `tfsdk:"arguments"`
+	Output          types.String         `tfsdk:"output"`
 }
 
 type stringValue interface {
@@ -87,6 +88,7 @@ var testItemValidationRules = map[string][]itemFieldRule{
 		{Name: "content_blocks", Getter: func(item testItemModel) stringValue { return item.ContentBlocks }},
 	},
 	"function_call": {
+		{Name: "content_contains", Getter: func(item testItemModel) stringValue { return item.ContentContains }},
 		{Name: "call_id", Getter: func(item testItemModel) stringValue { return item.CallID }, Required: true},
 		{Name: "func_name", Getter: func(item testItemModel) stringValue { return item.FuncName }, Required: true},
 		{Name: "arguments", Getter: func(item testItemModel) stringValue { return item.Arguments }, Required: true},
@@ -97,6 +99,7 @@ var testItemValidationRules = map[string][]itemFieldRule{
 		{Name: "content_blocks", Getter: func(item testItemModel) stringValue { return item.ContentBlocks }},
 	},
 	"function_call_output": {
+		{Name: "content_contains", Getter: func(item testItemModel) stringValue { return item.ContentContains }},
 		{Name: "call_id", Getter: func(item testItemModel) stringValue { return item.CallID }, Required: true},
 		{Name: "output", Getter: func(item testItemModel) stringValue { return item.Output }, Required: true},
 		{Name: "role", Getter: func(item testItemModel) stringValue { return item.Role }},
@@ -107,6 +110,7 @@ var testItemValidationRules = map[string][]itemFieldRule{
 		{Name: "content_blocks", Getter: func(item testItemModel) stringValue { return item.ContentBlocks }},
 	},
 	"anthropic_system": {
+		{Name: "content_contains", Getter: func(item testItemModel) stringValue { return item.ContentContains }},
 		{Name: "role", Getter: func(item testItemModel) stringValue { return item.Role }},
 		{Name: "content", Getter: func(item testItemModel) stringValue { return item.Content }},
 		{Name: "call_id", Getter: func(item testItemModel) stringValue { return item.CallID }},
@@ -215,6 +219,10 @@ func (r *testResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 							Optional:    true,
 							Computed:    true,
 							Default:     booldefault.StaticBool(false),
+						},
+						"content_contains": schema.StringAttribute{
+							Description: "Substring the actual message content must contain, instead of matching it exactly.",
+							Optional:    true,
 						},
 						"repeat": schema.BoolAttribute{
 							Description: "Whether the message item can repeat.",
@@ -558,6 +566,21 @@ func boolPointerFromValue(value types.Bool) *bool {
 	return &boolValue
 }
 
+func stringPointerFromValue(value types.String) *string {
+	if value.IsUnknown() || value.IsNull() || value.ValueString() == "" {
+		return nil
+	}
+	stringValue := value.ValueString()
+	return &stringValue
+}
+
+func stringValueOrNull(value string) types.String {
+	if value == "" {
+		return types.StringNull()
+	}
+	return types.StringValue(value)
+}
+
 func expandTestItems(items []testItemModel) ([]client.TestItem, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	if len(items) == 0 {
@@ -577,7 +600,7 @@ func expandTestItems(items []testItemModel) ([]client.TestItem, diag.Diagnostics
 			anyRole := boolPointerFromValue(item.AnyRole)
 			anyContent := boolPointerFromValue(item.AnyContent)
 			repeat := boolPointerFromValue(item.Repeat)
-			messageItem, err := client.NewMessageItem(item.Role.ValueString(), item.Content.ValueString(), anyRole, anyContent, repeat)
+			messageItem, err := client.NewMessageItem(item.Role.ValueString(), item.Content.ValueString(), anyRole, anyContent, repeat, stringPointerFromValue(item.ContentContains))
 			if err != nil {
 				diags.AddError("Error building message item", err.Error())
 				return nil, diags
@@ -640,9 +663,9 @@ func expandTestItems(items []testItemModel) ([]client.TestItem, diag.Diagnostics
 			var err error
 			anyContent := boolPointerFromValue(item.AnyContent)
 			if contentSet {
-				messageItem, err = client.NewAnthropicMessageStringItem(item.Role.ValueString(), item.Content.ValueString(), anyContent)
+				messageItem, err = client.NewAnthropicMessageStringItem(item.Role.ValueString(), item.Content.ValueString(), anyContent, stringPointerFromValue(item.ContentContains))
 			} else {
-				messageItem, err = client.NewAnthropicMessageBlocksItem(item.Role.ValueString(), json.RawMessage(item.ContentBlocks.ValueString()), anyContent)
+				messageItem, err = client.NewAnthropicMessageBlocksItem(item.Role.ValueString(), json.RawMessage(item.ContentBlocks.ValueString()), anyContent, stringPointerFromValue(item.ContentContains))
 			}
 			if err != nil {
 				diags.AddError("Error building anthropic_message item", err.Error())
@@ -674,18 +697,19 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 				return nil, diags
 			}
 			flattened = append(flattened, testItemModel{
-				Type:          types.StringValue("message"),
-				Role:          types.StringValue(messageContent.Role),
-				Content:       types.StringValue(messageContent.Content),
-				Text:          types.StringNull(),
-				ContentBlocks: jsontypes.NewNormalizedNull(),
-				AnyRole:       types.BoolValue(messageContent.AnyRole),
-				AnyContent:    types.BoolValue(messageContent.AnyContent),
-				Repeat:        types.BoolValue(messageContent.Repeat),
-				CallID:        types.StringNull(),
-				FuncName:      types.StringNull(),
-				Arguments:     jsontypes.NewNormalizedNull(),
-				Output:        types.StringNull(),
+				Type:            types.StringValue("message"),
+				Role:            types.StringValue(messageContent.Role),
+				Content:         types.StringValue(messageContent.Content),
+				Text:            types.StringNull(),
+				ContentBlocks:   jsontypes.NewNormalizedNull(),
+				AnyRole:         types.BoolValue(messageContent.AnyRole),
+				AnyContent:      types.BoolValue(messageContent.AnyContent),
+				ContentContains: stringValueOrNull(messageContent.ContentContains),
+				Repeat:          types.BoolValue(messageContent.Repeat),
+				CallID:          types.StringNull(),
+				FuncName:        types.StringNull(),
+				Arguments:       jsontypes.NewNormalizedNull(),
+				Output:          types.StringNull(),
 			})
 		case "function_call":
 			callID, name, arguments, err := client.ParseFunctionCallContent(item)
@@ -694,18 +718,19 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 				return nil, diags
 			}
 			flattened = append(flattened, testItemModel{
-				Type:          types.StringValue("function_call"),
-				Role:          types.StringNull(),
-				Content:       types.StringNull(),
-				Text:          types.StringNull(),
-				ContentBlocks: jsontypes.NewNormalizedNull(),
-				AnyRole:       types.BoolValue(false),
-				AnyContent:    types.BoolValue(false),
-				Repeat:        types.BoolValue(false),
-				CallID:        types.StringValue(callID),
-				FuncName:      types.StringValue(name),
-				Arguments:     jsontypes.NewNormalizedValue(arguments),
-				Output:        types.StringNull(),
+				Type:            types.StringValue("function_call"),
+				Role:            types.StringNull(),
+				Content:         types.StringNull(),
+				Text:            types.StringNull(),
+				ContentBlocks:   jsontypes.NewNormalizedNull(),
+				AnyRole:         types.BoolValue(false),
+				AnyContent:      types.BoolValue(false),
+				ContentContains: types.StringNull(),
+				Repeat:          types.BoolValue(false),
+				CallID:          types.StringValue(callID),
+				FuncName:        types.StringValue(name),
+				Arguments:       jsontypes.NewNormalizedValue(arguments),
+				Output:          types.StringNull(),
 			})
 		case "function_call_output":
 			callID, output, err := client.ParseFunctionCallOutputContent(item)
@@ -714,18 +739,19 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 				return nil, diags
 			}
 			flattened = append(flattened, testItemModel{
-				Type:          types.StringValue("function_call_output"),
-				Role:          types.StringNull(),
-				Content:       types.StringNull(),
-				Text:          types.StringNull(),
-				ContentBlocks: jsontypes.NewNormalizedNull(),
-				AnyRole:       types.BoolValue(false),
-				AnyContent:    types.BoolValue(false),
-				Repeat:        types.BoolValue(false),
-				CallID:        types.StringValue(callID),
-				FuncName:      types.StringNull(),
-				Arguments:     jsontypes.NewNormalizedNull(),
-				Output:        types.StringValue(output),
+				Type:            types.StringValue("function_call_output"),
+				Role:            types.StringNull(),
+				Content:         types.StringNull(),
+				Text:            types.StringNull(),
+				ContentBlocks:   jsontypes.NewNormalizedNull(),
+				AnyRole:         types.BoolValue(false),
+				AnyContent:      types.BoolValue(false),
+				ContentContains: types.StringNull(),
+				Repeat:          types.BoolValue(false),
+				CallID:          types.StringValue(callID),
+				FuncName:        types.StringNull(),
+				Arguments:       jsontypes.NewNormalizedNull(),
+				Output:          types.StringValue(output),
 			})
 		case "anthropic_system":
 			systemContent, err := client.ParseAnthropicSystemContent(item)
@@ -741,18 +767,19 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 				textValue = types.StringValue(systemContent.Text)
 			}
 			flattened = append(flattened, testItemModel{
-				Type:          types.StringValue("anthropic_system"),
-				Role:          types.StringNull(),
-				Content:       types.StringNull(),
-				Text:          textValue,
-				ContentBlocks: blocksValue,
-				AnyRole:       types.BoolValue(false),
-				AnyContent:    types.BoolValue(systemContent.AnyContent),
-				Repeat:        types.BoolValue(false),
-				CallID:        types.StringNull(),
-				FuncName:      types.StringNull(),
-				Arguments:     jsontypes.NewNormalizedNull(),
-				Output:        types.StringNull(),
+				Type:            types.StringValue("anthropic_system"),
+				Role:            types.StringNull(),
+				Content:         types.StringNull(),
+				Text:            textValue,
+				ContentBlocks:   blocksValue,
+				AnyRole:         types.BoolValue(false),
+				AnyContent:      types.BoolValue(systemContent.AnyContent),
+				ContentContains: types.StringNull(),
+				Repeat:          types.BoolValue(false),
+				CallID:          types.StringNull(),
+				FuncName:        types.StringNull(),
+				Arguments:       jsontypes.NewNormalizedNull(),
+				Output:          types.StringNull(),
 			})
 		case "anthropic_message":
 			messageContent, err := client.ParseAnthropicMessageContent(item)
@@ -768,18 +795,19 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 				contentValue = types.StringValue(messageContent.Content)
 			}
 			flattened = append(flattened, testItemModel{
-				Type:          types.StringValue("anthropic_message"),
-				Role:          types.StringValue(messageContent.Role),
-				Content:       contentValue,
-				Text:          types.StringNull(),
-				ContentBlocks: blocksValue,
-				AnyRole:       types.BoolValue(false),
-				AnyContent:    types.BoolValue(messageContent.AnyContent),
-				Repeat:        types.BoolValue(false),
-				CallID:        types.StringNull(),
-				FuncName:      types.StringNull(),
-				Arguments:     jsontypes.NewNormalizedNull(),
-				Output:        types.StringNull(),
+				Type:            types.StringValue("anthropic_message"),
+				Role:            types.StringValue(messageContent.Role),
+				Content:         contentValue,
+				Text:            types.StringNull(),
+				ContentBlocks:   blocksValue,
+				AnyRole:         types.BoolValue(false),
+				AnyContent:      types.BoolValue(messageContent.AnyContent),
+				ContentContains: stringValueOrNull(messageContent.ContentContains),
+				Repeat:          types.BoolValue(false),
+				CallID:          types.StringNull(),
+				FuncName:        types.StringNull(),
+				Arguments:       jsontypes.NewNormalizedNull(),
+				Output:          types.StringNull(),
 			})
 		default:
 			diags.AddAttributeError(path.Root("items").AtListIndex(index).AtName("type"), "Invalid item type", fmt.Sprintf("Unsupported item type %q.", item.Type))

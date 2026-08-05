@@ -108,6 +108,7 @@ Optional:
 - `call_id` (String) Function call identifier for function_call and function_call_output items.
 - `content` (String) Content for message items.
 - `content_blocks` (String) JSON-encoded array of Anthropic content blocks.
+- `content_contains` (String) Substring the actual message content must contain, instead of matching it exactly.
 - `func_name` (String) Function name for function_call items.
 - `output` (String) Output content for function_call_output items.
 - `repeat` (Boolean) Whether the message item can repeat.
