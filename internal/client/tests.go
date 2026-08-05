@@ -38,19 +38,21 @@ type testUpdateRequest struct {
 }
 
 type messageContent struct {
-	Role       string `json:"role"`
-	Content    string `json:"content"`
-	AnyRole    *bool  `json:"any_role,omitempty"`
-	AnyContent *bool  `json:"any_content,omitempty"`
-	Repeat     *bool  `json:"repeat,omitempty"`
+	Role            string  `json:"role"`
+	Content         string  `json:"content"`
+	AnyRole         *bool   `json:"any_role,omitempty"`
+	AnyContent      *bool   `json:"any_content,omitempty"`
+	ContentContains *string `json:"content_contains,omitempty"`
+	Repeat          *bool   `json:"repeat,omitempty"`
 }
 
 type MessageContent struct {
-	Role       string
-	Content    string
-	AnyRole    bool
-	AnyContent bool
-	Repeat     bool
+	Role            string
+	Content         string
+	AnyRole         bool
+	AnyContent      bool
+	ContentContains string
+	Repeat          bool
 }
 
 type anthropicSystemTextContent struct {
@@ -70,16 +72,18 @@ type AnthropicSystemContent struct {
 }
 
 type anthropicMessageContent struct {
-	Role       string          `json:"role"`
-	Content    json.RawMessage `json:"content"`
-	AnyContent *bool           `json:"any_content,omitempty"`
+	Role            string          `json:"role"`
+	Content         json.RawMessage `json:"content"`
+	AnyContent      *bool           `json:"any_content,omitempty"`
+	ContentContains *string         `json:"content_contains,omitempty"`
 }
 
 type AnthropicMessageContent struct {
-	Role          string
-	Content       string
-	ContentBlocks json.RawMessage
-	AnyContent    bool
+	Role            string
+	Content         string
+	ContentBlocks   json.RawMessage
+	AnyContent      bool
+	ContentContains string
 }
 
 type functionCallContent struct {
@@ -93,13 +97,16 @@ type functionCallOutputContent struct {
 	Output string `json:"output"`
 }
 
-func NewMessageItem(role, content string, anyRole, anyContent, repeat *bool) (TestItem, error) {
+func NewMessageItem(role, content string, anyRole, anyContent, repeat *bool, contentContains *string) (TestItem, error) {
 	messagePayload := messageContent{Role: role, Content: content}
 	if anyRole != nil && *anyRole {
 		messagePayload.AnyRole = anyRole
 	}
 	if anyContent != nil && *anyContent {
 		messagePayload.AnyContent = anyContent
+	}
+	if contentContains != nil && *contentContains != "" {
+		messagePayload.ContentContains = contentContains
 	}
 	if repeat != nil && *repeat {
 		messagePayload.Repeat = repeat
@@ -152,7 +159,7 @@ func NewAnthropicSystemBlocksItem(blocksJSON json.RawMessage, anyContent *bool) 
 	return TestItem{Type: "anthropic_system", Content: payload}, nil
 }
 
-func NewAnthropicMessageStringItem(role, content string, anyContent *bool) (TestItem, error) {
+func NewAnthropicMessageStringItem(role, content string, anyContent *bool, contentContains *string) (TestItem, error) {
 	contentPayload, err := json.Marshal(content)
 	if err != nil {
 		return TestItem{}, err
@@ -161,6 +168,9 @@ func NewAnthropicMessageStringItem(role, content string, anyContent *bool) (Test
 	if anyContent != nil && *anyContent {
 		messagePayload.AnyContent = anyContent
 	}
+	if contentContains != nil && *contentContains != "" {
+		messagePayload.ContentContains = contentContains
+	}
 	payload, err := json.Marshal(messagePayload)
 	if err != nil {
 		return TestItem{}, err
@@ -168,10 +178,13 @@ func NewAnthropicMessageStringItem(role, content string, anyContent *bool) (Test
 	return TestItem{Type: "anthropic_message", Content: payload}, nil
 }
 
-func NewAnthropicMessageBlocksItem(role string, blocksJSON json.RawMessage, anyContent *bool) (TestItem, error) {
+func NewAnthropicMessageBlocksItem(role string, blocksJSON json.RawMessage, anyContent *bool, contentContains *string) (TestItem, error) {
 	messagePayload := anthropicMessageContent{Role: role, Content: blocksJSON}
 	if anyContent != nil && *anyContent {
 		messagePayload.AnyContent = anyContent
+	}
+	if contentContains != nil && *contentContains != "" {
+		messagePayload.ContentContains = contentContains
 	}
 	payload, err := json.Marshal(messagePayload)
 	if err != nil {
@@ -186,12 +199,20 @@ func ParseMessageContent(item TestItem) (MessageContent, error) {
 		return MessageContent{}, err
 	}
 	return MessageContent{
-		Role:       payload.Role,
-		Content:    payload.Content,
-		AnyRole:    boolFromPointer(payload.AnyRole),
-		AnyContent: boolFromPointer(payload.AnyContent),
-		Repeat:     boolFromPointer(payload.Repeat),
+		Role:            payload.Role,
+		Content:         payload.Content,
+		AnyRole:         boolFromPointer(payload.AnyRole),
+		AnyContent:      boolFromPointer(payload.AnyContent),
+		ContentContains: stringFromPointer(payload.ContentContains),
+		Repeat:          boolFromPointer(payload.Repeat),
 	}, nil
+}
+
+func stringFromPointer(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func boolFromPointer(value *bool) bool {
@@ -263,13 +284,13 @@ func ParseAnthropicMessageContent(item TestItem) (AnthropicMessageContent, error
 		if err := json.Unmarshal(payload.Content, &textContent); err != nil {
 			return AnthropicMessageContent{}, fmt.Errorf("anthropic_message string content: %w", err)
 		}
-		return AnthropicMessageContent{Role: payload.Role, Content: textContent, AnyContent: boolFromPointer(payload.AnyContent)}, nil
+		return AnthropicMessageContent{Role: payload.Role, Content: textContent, AnyContent: boolFromPointer(payload.AnyContent), ContentContains: stringFromPointer(payload.ContentContains)}, nil
 	case '[':
 		var blocks []json.RawMessage
 		if err := json.Unmarshal(payload.Content, &blocks); err != nil {
 			return AnthropicMessageContent{}, fmt.Errorf("anthropic_message content must be a JSON string or array: %w", err)
 		}
-		return AnthropicMessageContent{Role: payload.Role, ContentBlocks: payload.Content, AnyContent: boolFromPointer(payload.AnyContent)}, nil
+		return AnthropicMessageContent{Role: payload.Role, ContentBlocks: payload.Content, AnyContent: boolFromPointer(payload.AnyContent), ContentContains: stringFromPointer(payload.ContentContains)}, nil
 	default:
 		return AnthropicMessageContent{}, fmt.Errorf("anthropic_message content must be a JSON string or array")
 	}

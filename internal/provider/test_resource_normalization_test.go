@@ -116,7 +116,7 @@ func TestFlattenTestItems_preservesJSON(t *testing.T) {
 	}
 
 	blocks := json.RawMessage(`[ { "type": "text", "text": "Use > /dev/null && echo ok" } ]`)
-	messageItem, err := client.NewAnthropicMessageBlocksItem("assistant", blocks, nil)
+	messageItem, err := client.NewAnthropicMessageBlocksItem("assistant", blocks, nil, nil)
 	if err != nil {
 		t.Fatalf("build anthropic_message item: %v", err)
 	}
