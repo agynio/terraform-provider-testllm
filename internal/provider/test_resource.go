@@ -57,6 +57,8 @@ type testItemModel struct {
 	FuncName        types.String         `tfsdk:"func_name"`
 	Arguments       jsontypes.Normalized `tfsdk:"arguments"`
 	Output          types.String         `tfsdk:"output"`
+	Namespace       types.String         `tfsdk:"namespace"`
+	OutputContains  types.String         `tfsdk:"output_contains"`
 }
 
 type stringValue interface {
@@ -86,6 +88,8 @@ var testItemValidationRules = map[string][]itemFieldRule{
 		{Name: "output", Getter: func(item testItemModel) stringValue { return item.Output }},
 		{Name: "text", Getter: func(item testItemModel) stringValue { return item.Text }},
 		{Name: "content_blocks", Getter: func(item testItemModel) stringValue { return item.ContentBlocks }},
+		{Name: "namespace", Getter: func(item testItemModel) stringValue { return item.Namespace }},
+		{Name: "output_contains", Getter: func(item testItemModel) stringValue { return item.OutputContains }},
 	},
 	"function_call": {
 		{Name: "content_contains", Getter: func(item testItemModel) stringValue { return item.ContentContains }},
@@ -97,6 +101,7 @@ var testItemValidationRules = map[string][]itemFieldRule{
 		{Name: "output", Getter: func(item testItemModel) stringValue { return item.Output }},
 		{Name: "text", Getter: func(item testItemModel) stringValue { return item.Text }},
 		{Name: "content_blocks", Getter: func(item testItemModel) stringValue { return item.ContentBlocks }},
+		{Name: "output_contains", Getter: func(item testItemModel) stringValue { return item.OutputContains }},
 	},
 	"function_call_output": {
 		{Name: "content_contains", Getter: func(item testItemModel) stringValue { return item.ContentContains }},
@@ -108,6 +113,7 @@ var testItemValidationRules = map[string][]itemFieldRule{
 		{Name: "arguments", Getter: func(item testItemModel) stringValue { return item.Arguments }},
 		{Name: "text", Getter: func(item testItemModel) stringValue { return item.Text }},
 		{Name: "content_blocks", Getter: func(item testItemModel) stringValue { return item.ContentBlocks }},
+		{Name: "namespace", Getter: func(item testItemModel) stringValue { return item.Namespace }},
 	},
 	"anthropic_system": {
 		{Name: "content_contains", Getter: func(item testItemModel) stringValue { return item.ContentContains }},
@@ -117,6 +123,8 @@ var testItemValidationRules = map[string][]itemFieldRule{
 		{Name: "func_name", Getter: func(item testItemModel) stringValue { return item.FuncName }},
 		{Name: "arguments", Getter: func(item testItemModel) stringValue { return item.Arguments }},
 		{Name: "output", Getter: func(item testItemModel) stringValue { return item.Output }},
+		{Name: "namespace", Getter: func(item testItemModel) stringValue { return item.Namespace }},
+		{Name: "output_contains", Getter: func(item testItemModel) stringValue { return item.OutputContains }},
 	},
 	"anthropic_message": {
 		{Name: "role", Getter: func(item testItemModel) stringValue { return item.Role }, Required: true},
@@ -125,6 +133,8 @@ var testItemValidationRules = map[string][]itemFieldRule{
 		{Name: "func_name", Getter: func(item testItemModel) stringValue { return item.FuncName }},
 		{Name: "arguments", Getter: func(item testItemModel) stringValue { return item.Arguments }},
 		{Name: "output", Getter: func(item testItemModel) stringValue { return item.Output }},
+		{Name: "namespace", Getter: func(item testItemModel) stringValue { return item.Namespace }},
+		{Name: "output_contains", Getter: func(item testItemModel) stringValue { return item.OutputContains }},
 	},
 }
 
@@ -245,6 +255,14 @@ func (r *testResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 						},
 						"output": schema.StringAttribute{
 							Description: "Output content for function_call_output items.",
+							Optional:    true,
+						},
+						"namespace": schema.StringAttribute{
+							Description: "Namespace the tool belongs to, for function_call items. A namespaced tool is called by its plain func_name with the namespace carried beside it.",
+							Optional:    true,
+						},
+						"output_contains": schema.StringAttribute{
+							Description: "Substring the output must contain, for function_call_output items. Use instead of output when the result is not reproducible verbatim.",
 							Optional:    true,
 						},
 					},
@@ -607,14 +625,14 @@ func expandTestItems(items []testItemModel) ([]client.TestItem, diag.Diagnostics
 			}
 			expanded = append(expanded, messageItem)
 		case "function_call":
-			callItem, err := client.NewFunctionCallItem(item.CallID.ValueString(), item.FuncName.ValueString(), item.Arguments.ValueString())
+			callItem, err := client.NewFunctionCallItem(item.CallID.ValueString(), item.FuncName.ValueString(), item.Arguments.ValueString(), stringPointerFromValue(item.Namespace))
 			if err != nil {
 				diags.AddError("Error building function_call item", err.Error())
 				return nil, diags
 			}
 			expanded = append(expanded, callItem)
 		case "function_call_output":
-			outputItem, err := client.NewFunctionCallOutputItem(item.CallID.ValueString(), item.Output.ValueString())
+			outputItem, err := client.NewFunctionCallOutputItem(item.CallID.ValueString(), item.Output.ValueString(), stringPointerFromValue(item.OutputContains))
 			if err != nil {
 				diags.AddError("Error building function_call_output item", err.Error())
 				return nil, diags

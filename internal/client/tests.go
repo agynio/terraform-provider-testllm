@@ -87,14 +87,16 @@ type AnthropicMessageContent struct {
 }
 
 type functionCallContent struct {
-	CallID    string `json:"call_id"`
-	Name      string `json:"name"`
-	Arguments string `json:"arguments"`
+	CallID    string  `json:"call_id"`
+	Name      string  `json:"name"`
+	Arguments string  `json:"arguments"`
+	Namespace *string `json:"namespace,omitempty"`
 }
 
 type functionCallOutputContent struct {
-	CallID string `json:"call_id"`
-	Output string `json:"output"`
+	CallID         string  `json:"call_id"`
+	Output         string  `json:"output"`
+	OutputContains *string `json:"output_contains,omitempty"`
 }
 
 func NewMessageItem(role, content string, anyRole, anyContent, repeat *bool, contentContains *string) (TestItem, error) {
@@ -119,16 +121,24 @@ func NewMessageItem(role, content string, anyRole, anyContent, repeat *bool, con
 	return TestItem{Type: "message", Content: payload}, nil
 }
 
-func NewFunctionCallItem(callID, name, arguments string) (TestItem, error) {
-	payload, err := json.Marshal(functionCallContent{CallID: callID, Name: name, Arguments: arguments})
+func NewFunctionCallItem(callID, name, arguments string, namespace *string) (TestItem, error) {
+	callPayload := functionCallContent{CallID: callID, Name: name, Arguments: arguments}
+	if namespace != nil && *namespace != "" {
+		callPayload.Namespace = namespace
+	}
+	payload, err := json.Marshal(callPayload)
 	if err != nil {
 		return TestItem{}, err
 	}
 	return TestItem{Type: "function_call", Content: payload}, nil
 }
 
-func NewFunctionCallOutputItem(callID, output string) (TestItem, error) {
-	payload, err := json.Marshal(functionCallOutputContent{CallID: callID, Output: output})
+func NewFunctionCallOutputItem(callID, output string, outputContains *string) (TestItem, error) {
+	outputPayload := functionCallOutputContent{CallID: callID, Output: output}
+	if outputContains != nil && *outputContains != "" {
+		outputPayload.OutputContains = outputContains
+	}
+	payload, err := json.Marshal(outputPayload)
 	if err != nil {
 		return TestItem{}, err
 	}
