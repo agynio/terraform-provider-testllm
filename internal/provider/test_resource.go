@@ -592,6 +592,13 @@ func stringPointerFromValue(value types.String) *string {
 	return &stringValue
 }
 
+func stringPointerValueOrNull(value *string) types.String {
+	if value == nil || *value == "" {
+		return types.StringNull()
+	}
+	return types.StringValue(*value)
+}
+
 func stringValueOrNull(value string) types.String {
 	if value == "" {
 		return types.StringNull()
@@ -728,9 +735,11 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 				FuncName:        types.StringNull(),
 				Arguments:       jsontypes.NewNormalizedNull(),
 				Output:          types.StringNull(),
+				Namespace:       types.StringNull(),
+				OutputContains:  types.StringNull(),
 			})
 		case "function_call":
-			callID, name, arguments, err := client.ParseFunctionCallContent(item)
+			callID, name, arguments, namespace, err := client.ParseFunctionCallContent(item)
 			if err != nil {
 				diags.AddError("Error parsing function_call item", err.Error())
 				return nil, diags
@@ -749,9 +758,11 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 				FuncName:        types.StringValue(name),
 				Arguments:       jsontypes.NewNormalizedValue(arguments),
 				Output:          types.StringNull(),
+				Namespace:       stringPointerValueOrNull(namespace),
+				OutputContains:  types.StringNull(),
 			})
 		case "function_call_output":
-			callID, output, err := client.ParseFunctionCallOutputContent(item)
+			callID, output, outputContains, err := client.ParseFunctionCallOutputContent(item)
 			if err != nil {
 				diags.AddError("Error parsing function_call_output item", err.Error())
 				return nil, diags
@@ -770,6 +781,8 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 				FuncName:        types.StringNull(),
 				Arguments:       jsontypes.NewNormalizedNull(),
 				Output:          types.StringValue(output),
+				Namespace:       types.StringNull(),
+				OutputContains:  stringPointerValueOrNull(outputContains),
 			})
 		case "anthropic_system":
 			systemContent, err := client.ParseAnthropicSystemContent(item)
@@ -798,6 +811,8 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 				FuncName:        types.StringNull(),
 				Arguments:       jsontypes.NewNormalizedNull(),
 				Output:          types.StringNull(),
+				Namespace:       types.StringNull(),
+				OutputContains:  types.StringNull(),
 			})
 		case "anthropic_message":
 			messageContent, err := client.ParseAnthropicMessageContent(item)
@@ -826,6 +841,8 @@ func flattenTestItems(items []client.TestItem) ([]testItemModel, diag.Diagnostic
 				FuncName:        types.StringNull(),
 				Arguments:       jsontypes.NewNormalizedNull(),
 				Output:          types.StringNull(),
+				Namespace:       types.StringNull(),
+				OutputContains:  types.StringNull(),
 			})
 		default:
 			diags.AddAttributeError(path.Root("items").AtListIndex(index).AtName("type"), "Invalid item type", fmt.Sprintf("Unsupported item type %q.", item.Type))

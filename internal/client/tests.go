@@ -232,20 +232,20 @@ func boolFromPointer(value *bool) bool {
 	return *value
 }
 
-func ParseFunctionCallContent(item TestItem) (string, string, string, error) {
+func ParseFunctionCallContent(item TestItem) (string, string, string, *string, error) {
 	var payload functionCallContent
 	if err := json.Unmarshal(item.Content, &payload); err != nil {
-		return "", "", "", err
+		return "", "", "", nil, err
 	}
-	return payload.CallID, payload.Name, payload.Arguments, nil
+	return payload.CallID, payload.Name, payload.Arguments, payload.Namespace, nil
 }
 
-func ParseFunctionCallOutputContent(item TestItem) (string, string, error) {
+func ParseFunctionCallOutputContent(item TestItem) (string, string, *string, error) {
 	var payload functionCallOutputContent
 	if err := json.Unmarshal(item.Content, &payload); err != nil {
-		return "", "", err
+		return "", "", nil, err
 	}
-	return payload.CallID, payload.Output, nil
+	return payload.CallID, payload.Output, payload.OutputContains, nil
 }
 
 func ParseAnthropicSystemContent(item TestItem) (AnthropicSystemContent, error) {
