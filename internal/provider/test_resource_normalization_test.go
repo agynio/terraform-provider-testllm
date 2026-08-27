@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/agynio/terraform-provider-testllm/internal/client"
@@ -110,7 +111,7 @@ func TestExpandTestItems_preservesJSON(t *testing.T) {
 
 func TestFlattenTestItems_preservesJSON(t *testing.T) {
 	arguments := `{"command": "agyn threads send --message \"Thinking\" > /dev/null && echo ok", "meta": {"z": 1, "a": 2}}`
-	callItem, err := client.NewFunctionCallItem("call-1", "get_data", arguments)
+	callItem, err := client.NewFunctionCallItem("call-1", "get_data", arguments, nil)
 	if err != nil {
 		t.Fatalf("build function_call item: %v", err)
 	}
@@ -140,4 +141,51 @@ func TestFlattenTestItems_preservesJSON(t *testing.T) {
 	}
 	assertJSONSemanticallyEqual(t, string(blocks), flattened[1].ContentBlocks.ValueString())
 	assertJSONSemanticallyEqual(t, string(systemBlocks), flattened[2].ContentBlocks.ValueString())
+}
+
+// A namespaced tool is called by its plain name with the namespace beside it,
+// so the namespace has to survive into the payload as its own field.
+func TestNewFunctionCallItem_carriesNamespace(t *testing.T) {
+	namespace := "mcp__memory"
+	item, err := client.NewFunctionCallItem("call-1", "create_entities", `{}`, &namespace)
+	if err != nil {
+		t.Fatalf("build function_call item: %v", err)
+	}
+	if got := string(item.Content); !strings.Contains(got, `"namespace":"mcp__memory"`) {
+		t.Fatalf("namespace missing from payload: %s", got)
+	}
+}
+
+// Omitted rather than sent empty: a script that names no namespace must look
+// exactly as it did before this field existed.
+func TestNewFunctionCallItem_omitsAbsentNamespace(t *testing.T) {
+	empty := ""
+	for name, namespace := range map[string]*string{"nil": nil, "empty": &empty} {
+		item, err := client.NewFunctionCallItem("call-1", "get_data", `{}`, namespace)
+		if err != nil {
+			t.Fatalf("%s: build function_call item: %v", name, err)
+		}
+		if got := string(item.Content); strings.Contains(got, "namespace") {
+			t.Fatalf("%s: namespace present in payload: %s", name, got)
+		}
+	}
+}
+
+func TestNewFunctionCallOutputItem_carriesOutputContains(t *testing.T) {
+	contains := `"name":"test_project"`
+	item, err := client.NewFunctionCallOutputItem("call-1", "", &contains)
+	if err != nil {
+		t.Fatalf("build function_call_output item: %v", err)
+	}
+	if got := string(item.Content); !strings.Contains(got, `"output_contains"`) {
+		t.Fatalf("output_contains missing from payload: %s", got)
+	}
+
+	plain, err := client.NewFunctionCallOutputItem("call-1", "{}", nil)
+	if err != nil {
+		t.Fatalf("build plain function_call_output item: %v", err)
+	}
+	if got := string(plain.Content); strings.Contains(got, "output_contains") {
+		t.Fatalf("output_contains present in payload: %s", got)
+	}
 }

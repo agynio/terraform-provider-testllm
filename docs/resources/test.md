@@ -110,7 +110,9 @@ Optional:
 - `content_blocks` (String) JSON-encoded array of Anthropic content blocks.
 - `content_contains` (String) Substring the actual message content must contain, instead of matching it exactly.
 - `func_name` (String) Function name for function_call items.
+- `namespace` (String) Namespace the tool belongs to, for function_call items. A namespaced tool is called by its plain func_name with the namespace carried beside it.
 - `output` (String) Output content for function_call_output items.
+- `output_contains` (String) Substring the output must contain, for function_call_output items. Use instead of output when the result is not reproducible verbatim.
 - `repeat` (Boolean) Whether the message item can repeat.
 - `role` (String) Role for message and anthropic_message items (user, system, developer, assistant).
 - `text` (String) Text content for anthropic_system items.
