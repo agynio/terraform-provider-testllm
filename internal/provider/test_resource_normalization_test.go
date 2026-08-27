@@ -82,7 +82,7 @@ func TestExpandTestItems_preservesJSON(t *testing.T) {
 		t.Fatalf("expected 3 items, got %d", len(expanded))
 	}
 
-	_, _, expandedArgs, err := client.ParseFunctionCallContent(expanded[0])
+	_, _, expandedArgs, _, err := client.ParseFunctionCallContent(expanded[0])
 	if err != nil {
 		t.Fatalf("parse function_call item: %v", err)
 	}
@@ -187,5 +187,48 @@ func TestNewFunctionCallOutputItem_carriesOutputContains(t *testing.T) {
 	}
 	if got := string(plain.Content); strings.Contains(got, "output_contains") {
 		t.Fatalf("output_contains present in payload: %s", got)
+	}
+}
+
+// Terraform compares what the provider returns after apply against the plan,
+// so a field set in configuration has to come back out of the API payload.
+func TestParseFunctionCall_roundTripsNamespace(t *testing.T) {
+	namespace := "mcp__memory"
+	item, err := client.NewFunctionCallItem("call-1", "create_entities", `{}`, &namespace)
+	if err != nil {
+		t.Fatalf("build function_call item: %v", err)
+	}
+	_, _, _, parsed, err := client.ParseFunctionCallContent(item)
+	if err != nil {
+		t.Fatalf("parse function_call item: %v", err)
+	}
+	if parsed == nil || *parsed != namespace {
+		t.Fatalf("namespace did not round-trip: %v", parsed)
+	}
+
+	plain, err := client.NewFunctionCallItem("call-1", "get_data", `{}`, nil)
+	if err != nil {
+		t.Fatalf("build plain function_call item: %v", err)
+	}
+	if _, _, _, parsed, err = client.ParseFunctionCallContent(plain); err != nil {
+		t.Fatalf("parse plain function_call item: %v", err)
+	}
+	if parsed != nil {
+		t.Fatalf("expected no namespace, got %q", *parsed)
+	}
+}
+
+func TestParseFunctionCallOutput_roundTripsOutputContains(t *testing.T) {
+	contains := `[FILE] hello.txt`
+	item, err := client.NewFunctionCallOutputItem("call-1", "", &contains)
+	if err != nil {
+		t.Fatalf("build function_call_output item: %v", err)
+	}
+	_, _, parsed, err := client.ParseFunctionCallOutputContent(item)
+	if err != nil {
+		t.Fatalf("parse function_call_output item: %v", err)
+	}
+	if parsed == nil || *parsed != contains {
+		t.Fatalf("output_contains did not round-trip: %v", parsed)
 	}
 }
